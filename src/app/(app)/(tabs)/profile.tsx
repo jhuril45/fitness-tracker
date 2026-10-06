@@ -3,22 +3,15 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Button, Card } from '../../../components/ui';
 import { useAuth, useCurrentUser } from '../../../lib/auth/AuthContext';
-import { countCompletions } from '../../../lib/schedule';
 import { useLoadOnFocus } from '../../../lib/useLoadOnFocus';
-import { listWorkouts } from '../../../lib/workouts';
+import { getProfileStats } from '../../../lib/workouts';
 import { colors, spacing } from '../../../theme';
 
 export default function ProfileScreen() {
   const user = useCurrentUser();
   const { logout } = useAuth();
   const [signingOut, setSigningOut] = useState(false);
-  const { data } = useLoadOnFocus(
-    async () => ({
-      workouts: (await listWorkouts(user.id)).length,
-      sessions: await countCompletions(user.id),
-    }),
-    [user.id],
-  );
+  const { data } = useLoadOnFocus(getProfileStats, [user.id]);
 
   async function signOut() {
     setSigningOut(true);
@@ -42,7 +35,7 @@ export default function ProfileScreen() {
           <Text style={styles.statLabel}>Workouts</Text>
         </Card>
         <Card style={styles.stat}>
-          <Text style={styles.statValue}>{data?.sessions ?? '–'}</Text>
+          <Text style={styles.statValue}>{data?.completions ?? '–'}</Text>
           <Text style={styles.statLabel}>Exercises done</Text>
         </Card>
       </View>

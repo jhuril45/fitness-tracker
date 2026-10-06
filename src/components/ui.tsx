@@ -14,7 +14,7 @@ import {
 
 import { colors, radius, spacing } from '../theme';
 
-type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost';
+type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'dangerSoft' | 'ghost';
 
 export function Button({
   title,
@@ -43,7 +43,7 @@ export function Button({
       ]}
       {...rest}>
       {loading ? (
-        <ActivityIndicator color={variant === 'primary' || variant === 'danger' ? '#fff' : colors.primary} />
+        <ActivityIndicator color={spinnerColors[variant]} />
       ) : (
         <Text style={[styles.buttonText, buttonTextVariants[variant]]}>{title}</Text>
       )}
@@ -152,13 +152,23 @@ const buttonVariants = StyleSheet.create({
   primary: { backgroundColor: colors.primary },
   secondary: { backgroundColor: colors.primarySoft },
   danger: { backgroundColor: colors.danger },
+  dangerSoft: { backgroundColor: colors.dangerSoft },
   ghost: { backgroundColor: 'transparent' },
 });
+
+const spinnerColors: Record<ButtonVariant, string> = {
+  primary: '#fff',
+  secondary: colors.primary,
+  danger: '#fff',
+  dangerSoft: colors.danger,
+  ghost: colors.primary,
+};
 
 const buttonTextVariants = StyleSheet.create({
   primary: { color: '#fff' },
   secondary: { color: colors.primary },
   danger: { color: '#fff' },
+  dangerSoft: { color: colors.danger },
   ghost: { color: colors.primary },
 });
 

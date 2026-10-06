@@ -11,7 +11,7 @@ import { spacing } from '../../../theme';
 
 export default function WorkoutsScreen() {
   const user = useCurrentUser();
-  const { data, error } = useLoadOnFocus(() => listWorkouts(user.id), [user.id]);
+  const { data, error } = useLoadOnFocus(() => listWorkouts(), [user.id]);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   function toggle(id: string) {

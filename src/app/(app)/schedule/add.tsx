@@ -9,9 +9,9 @@ import { useCurrentUser } from '../../../lib/auth/AuthContext';
 import { DAY_NAMES, DAY_NAMES_LONG } from '../../../lib/dates';
 import { countLabel } from '../../../lib/format';
 import { goBack } from '../../../lib/navigation';
-import { addToSchedule, getPlannedWorkoutIds } from '../../../lib/schedule';
+import { addToSchedule, getScheduleOptions } from '../../../lib/schedule';
 import { useLoadOnFocus } from '../../../lib/useLoadOnFocus';
-import { listWorkouts, type Workout } from '../../../lib/workouts';
+import type { Workout } from '../../../lib/workouts';
 import { colors, radius, spacing } from '../../../theme';
 
 const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
@@ -26,10 +26,7 @@ function daysLabel(days: number[]): string {
 export default function AddToScheduleScreen() {
   const params = useLocalSearchParams<{ day?: string; workoutId?: string }>();
   const user = useCurrentUser();
-  const { data } = useLoadOnFocus(async () => {
-    const [workouts, planned] = await Promise.all([listWorkouts(user.id), getPlannedWorkoutIds(user.id)]);
-    return { workouts, planned };
-  }, [user.id]);
+  const { data } = useLoadOnFocus(getScheduleOptions, [user.id]);
 
   const [days, setDays] = useState<number[]>(params.day ? [Number(params.day)] : []);
   /** Picked workout ids, in the order they'll be done. */
@@ -64,7 +61,6 @@ export default function AddToScheduleScreen() {
     setSaving(true);
     try {
       await addToSchedule(
-        user.id,
         picked.map((w) => w.id),
         days,
       );

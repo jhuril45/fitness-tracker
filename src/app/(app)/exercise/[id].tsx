@@ -4,9 +4,8 @@ import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-nat
 
 import { useConfirm } from '../../../components/ConfirmDialog';
 import { Button, Card, EmptyState, ErrorBanner, TextField } from '../../../components/ui';
-import { useCurrentUser } from '../../../lib/auth/AuthContext';
 import { formatDay, toDayString } from '../../../lib/dates';
-import { changeWeight, deleteExercise, getExercise, getWeightHistory } from '../../../lib/exercises';
+import { changeWeight, deleteExercise, getExerciseDetail } from '../../../lib/exercises';
 import { formatSetsReps, formatWeight, parsePositiveNumber } from '../../../lib/format';
 import { goBack } from '../../../lib/navigation';
 import { useLoadOnFocus } from '../../../lib/useLoadOnFocus';
@@ -15,7 +14,6 @@ import { colors, radius, spacing } from '../../../theme';
 
 export default function ExerciseDetailScreen() {
   const { id: exerciseId } = useLocalSearchParams<{ id: string }>();
-  const user = useCurrentUser();
   const confirm = useConfirm();
   const [newWeight, setNewWeight] = useState('');
   const [saving, setSaving] = useState(false);
@@ -25,10 +23,7 @@ export default function ExerciseDetailScreen() {
     data,
     error: loadError,
     reload,
-  } = useLoadOnFocus(async () => {
-    const [exercise, history] = await Promise.all([getExercise(exerciseId), getWeightHistory(exerciseId)]);
-    return { exercise, history };
-  }, [exerciseId]);
+  } = useLoadOnFocus(() => getExerciseDetail(exerciseId), [exerciseId]);
 
   if (loadError) return <EmptyState title="Something went wrong" message={loadError} />;
   if (!data) return <ActivityIndicator style={{ marginTop: 32 }} />;
@@ -46,7 +41,7 @@ export default function ExerciseDetailScreen() {
     setError(null);
     setSaving(true);
     try {
-      await changeWeight(user.id, exercise!, value);
+      await changeWeight(exerciseId, value);
       setNewWeight('');
       reload();
     } catch (e) {
@@ -158,7 +153,7 @@ export default function ExerciseDetailScreen() {
         </>
       ) : null}
 
-      <Button title="Delete exercise" variant="ghost" onPress={confirmDelete} style={styles.delete} />
+      <Button title="Delete exercise" variant="dangerSoft" onPress={confirmDelete} style={styles.delete} />
     </ScrollView>
   );
 }

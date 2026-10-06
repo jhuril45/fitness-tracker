@@ -30,7 +30,7 @@ function daySummary(items: ScheduleItem[]): string {
 export default function ScheduleScreen() {
   const user = useCurrentUser();
   const confirm = useConfirm();
-  const { data: week, reload, mutate } = useLoadOnFocus(() => getWeeklySchedule(user.id), [user.id]);
+  const { data: week, reload, mutate } = useLoadOnFocus(() => getWeeklySchedule(), [user.id]);
   const today = new Date().getDay();
   // Today starts open.
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set([today]));

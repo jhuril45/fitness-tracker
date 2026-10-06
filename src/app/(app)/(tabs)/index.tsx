@@ -42,7 +42,7 @@ export default function TodayScreen() {
   const [error, setError] = useState<string | null>(null);
   /** The exercise whose check-off is being saved. */
   const [saving, setSaving] = useState<string | null>(null);
-  const { data: plan, error: loadError, reload, mutate } = useLoadOnFocus(() => getDayPlan(user.id, date), [user.id, date]);
+  const { data: plan, error: loadError, reload, mutate } = useLoadOnFocus(() => getDayPlan(date), [user.id, date]);
 
   const isFuture = date > today;
   // Every exercise of the day in order, across all of the day's workouts.
@@ -73,8 +73,8 @@ export default function TodayScreen() {
         await markNotDone(exercise);
         change = { done: false, doneWeight: null, completionIds: [] };
       } else {
-        const id = await markDone(user.id, itemId, exercise, date);
-        change = { done: true, doneWeight: exercise.currentWeight, completionIds: [id] };
+        const { completionId, weight } = await markDone(itemId, exercise.id, date);
+        change = { done: true, doneWeight: weight, completionIds: [completionId] };
       }
       // Show the change as soon as it's saved, then sync with the server quietly.
       mutate((days) =>
