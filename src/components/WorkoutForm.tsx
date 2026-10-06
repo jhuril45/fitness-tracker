@@ -1,57 +1,68 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useState } from 'react';
-import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import type { NewExercise, WeightUnit } from '../lib/exercises';
 import { parsePositiveNumber } from '../lib/format';
-import type { WeightUnit, WorkoutInput } from '../lib/workouts';
-import { colors, spacing } from '../theme';
+import type { WorkoutInput } from '../lib/workouts';
+import { colors, radius, spacing } from '../theme';
 import { Button, Chip, ErrorBanner, TextField } from './ui';
 
-export type WorkoutFormValues = WorkoutInput & { startingWeight: number | null };
+type ExerciseRow = { key: number; name: string; sets: string; reps: string; weight: string };
 
+let nextKey = 0;
+const emptyRow = (): ExerciseRow => ({ key: nextKey++, name: '', sets: '', reps: '', weight: '' });
+
+function toCount(text: string): number | null {
+  const n = parseInt(text, 10);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/**
+ * Name and notes of a workout. New workouts also list their exercises here;
+ * existing ones manage exercises on the workout screen.
+ */
 export function WorkoutForm({
   initial,
-  askStartingWeight,
+  withExercises,
   submitLabel,
   onSubmit,
 }: {
   initial?: WorkoutInput;
-  /** Only new workouts ask for a weight; existing ones change it on the detail screen. */
-  askStartingWeight: boolean;
+  withExercises: boolean;
   submitLabel: string;
-  onSubmit: (values: WorkoutFormValues) => Promise<void>;
+  onSubmit: (values: WorkoutInput, exercises: NewExercise[]) => Promise<void>;
 }) {
   const [name, setName] = useState(initial?.name ?? '');
   const [notes, setNotes] = useState(initial?.notes ?? '');
-  const [usesWeight, setUsesWeight] = useState(initial?.usesWeight ?? true);
-  const [unit, setUnit] = useState<WeightUnit>(initial?.unit ?? 'kg');
-  const [sets, setSets] = useState(initial?.sets ? String(initial.sets) : '');
-  const [reps, setReps] = useState(initial?.reps ? String(initial.reps) : '');
-  const [weight, setWeight] = useState('');
+  const [unit, setUnit] = useState<WeightUnit>('kg');
+  const [rows, setRows] = useState<ExerciseRow[]>(() => [emptyRow()]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
+  function editRow(key: number, change: Partial<ExerciseRow>) {
+    setRows((prev) => prev.map((r) => (r.key === key ? { ...r, ...change } : r)));
+  }
+
   async function submit() {
-    if (!name.trim()) return setError('Give the workout a name.');
-    const startingWeight = askStartingWeight && usesWeight ? parsePositiveNumber(weight) : null;
-    if (askStartingWeight && usesWeight && weight.trim() && startingWeight === null) {
-      return setError('Weight must be a number greater than 0.');
+    if (!name.trim()) return setError('Give the workout a name, e.g. Chest day.');
+    const filled = withExercises ? rows.filter((r) => r.name.trim()) : [];
+    if (filled.some((r) => r.weight.trim() && parsePositiveNumber(r.weight) === null)) {
+      return setError('Weights must be numbers greater than 0.');
     }
-    const toCount = (text: string) => {
-      const n = parseInt(text, 10);
-      return Number.isFinite(n) && n > 0 ? n : null;
-    };
+    const exercises: NewExercise[] = filled.map((r) => ({
+      name: r.name,
+      notes: '',
+      usesWeight: true,
+      unit,
+      sets: toCount(r.sets),
+      reps: toCount(r.reps),
+      startingWeight: parsePositiveNumber(r.weight),
+    }));
     setError(null);
     setSaving(true);
     try {
-      await onSubmit({
-        name,
-        notes,
-        usesWeight,
-        unit,
-        sets: toCount(sets),
-        reps: toCount(reps),
-        startingWeight,
-      });
+      await onSubmit({ name, notes }, exercises);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not save the workout.');
       setSaving(false);
@@ -61,55 +72,7 @@ export function WorkoutForm({
   return (
     <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <ErrorBanner message={error} />
-      <TextField label="Name" value={name} onChangeText={setName} placeholder="e.g. Bench press" />
-      <View style={styles.row}>
-        <View style={styles.flex}>
-          <TextField
-            label="Sets"
-            value={sets}
-            onChangeText={setSets}
-            keyboardType="number-pad"
-            placeholder="3"
-          />
-        </View>
-        <View style={styles.flex}>
-          <TextField
-            label="Reps"
-            value={reps}
-            onChangeText={setReps}
-            keyboardType="number-pad"
-            placeholder="10"
-          />
-        </View>
-      </View>
-
-      <View style={styles.switchRow}>
-        <View style={styles.flex}>
-          <Text style={styles.switchLabel}>Uses weights</Text>
-          <Text style={styles.hint}>Track the weight you lift and how long you stay at each one.</Text>
-        </View>
-        <Switch value={usesWeight} onValueChange={setUsesWeight} />
-      </View>
-
-      {usesWeight ? (
-        <>
-          <Text style={styles.switchLabel}>Unit</Text>
-          <View style={styles.chips}>
-            <Chip label="kg" selected={unit === 'kg'} onPress={() => setUnit('kg')} />
-            <Chip label="lb" selected={unit === 'lb'} onPress={() => setUnit('lb')} />
-          </View>
-          {askStartingWeight ? (
-            <TextField
-              label={`Starting weight (${unit})`}
-              value={weight}
-              onChangeText={setWeight}
-              keyboardType="decimal-pad"
-              placeholder="Optional"
-            />
-          ) : null}
-        </>
-      ) : null}
-
+      <TextField label="Workout name" value={name} onChangeText={setName} placeholder="e.g. Chest day" />
       <TextField
         label="Notes"
         value={notes}
@@ -118,23 +81,111 @@ export function WorkoutForm({
         multiline
         style={styles.notes}
       />
+
+      {withExercises ? (
+        <>
+          <View style={styles.exercisesHeader}>
+            <Text style={styles.heading}>Exercises</Text>
+            <View style={styles.chips}>
+              <Chip label="kg" selected={unit === 'kg'} onPress={() => setUnit('kg')} />
+              <Chip label="lb" selected={unit === 'lb'} onPress={() => setUnit('lb')} />
+            </View>
+          </View>
+          <Text style={styles.hint}>You can add more, reorder them and change weights later.</Text>
+
+          {rows.map((row, index) => (
+            <View key={row.key} style={styles.row}>
+              <View style={styles.rowTop}>
+                <Text style={styles.rowNumber}>{index + 1}</Text>
+                <View style={styles.flex}>
+                  <TextField
+                    label="Exercise"
+                    value={row.name}
+                    onChangeText={(text) => editRow(row.key, { name: text })}
+                    placeholder="e.g. Incline dumbbell bench press"
+                  />
+                </View>
+                {rows.length > 1 ? (
+                  <Pressable
+                    accessibilityLabel={`Remove exercise ${index + 1}`}
+                    onPress={() => setRows((prev) => prev.filter((r) => r.key !== row.key))}
+                    hitSlop={8}
+                    style={styles.remove}>
+                    <Ionicons name="close" size={20} color={colors.danger} />
+                  </Pressable>
+                ) : null}
+              </View>
+              <View style={styles.numbers}>
+                <View style={styles.flex}>
+                  <TextField
+                    label="Sets"
+                    value={row.sets}
+                    onChangeText={(text) => editRow(row.key, { sets: text })}
+                    keyboardType="number-pad"
+                    placeholder="3"
+                  />
+                </View>
+                <View style={styles.flex}>
+                  <TextField
+                    label="Reps"
+                    value={row.reps}
+                    onChangeText={(text) => editRow(row.key, { reps: text })}
+                    keyboardType="number-pad"
+                    placeholder="12"
+                  />
+                </View>
+                <View style={styles.flex}>
+                  <TextField
+                    label={`Weight (${unit})`}
+                    value={row.weight}
+                    onChangeText={(text) => editRow(row.key, { weight: text })}
+                    keyboardType="decimal-pad"
+                    placeholder="Optional"
+                  />
+                </View>
+              </View>
+            </View>
+          ))}
+
+          <Button
+            title="Add another exercise"
+            variant="secondary"
+            onPress={() => setRows((prev) => [...prev, emptyRow()])}
+            style={styles.addRow}
+          />
+        </>
+      ) : null}
+
       <Button title={submitLabel} onPress={submit} loading={saving} />
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  content: { padding: spacing.lg },
-  row: { flexDirection: 'row', gap: spacing.md },
-  flex: { flex: 1 },
-  switchRow: {
+  content: { padding: spacing.lg, paddingBottom: spacing.xl * 2 },
+  notes: { minHeight: 60, textAlignVertical: 'top' },
+  exercisesHeader: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: spacing.md,
+    marginTop: spacing.sm,
+  },
+  heading: { fontSize: 18, fontWeight: '700', color: colors.text },
+  chips: { flexDirection: 'row', gap: spacing.sm },
+  hint: { fontSize: 13, color: colors.muted, marginBottom: spacing.md, marginTop: spacing.xs },
+  row: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.md,
+    paddingBottom: 0,
     marginBottom: spacing.md,
   },
-  switchLabel: { fontSize: 14, fontWeight: '600', color: colors.text, marginBottom: spacing.xs },
-  hint: { fontSize: 13, color: colors.muted },
-  chips: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md },
-  notes: { minHeight: 80, textAlignVertical: 'top' },
+  rowTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  rowNumber: { width: 18, fontWeight: '700', color: colors.muted },
+  remove: { paddingTop: spacing.md },
+  numbers: { flexDirection: 'row', gap: spacing.sm, marginLeft: 18 + spacing.sm },
+  flex: { flex: 1 },
+  addRow: { marginBottom: spacing.lg },
 });

@@ -1,8 +1,8 @@
 import { daysBetween } from './dates';
 
 export type WeightPeriod = {
-  id: number;
-  workoutId: number;
+  id: string;
+  exerciseId: string;
   weight: number;
   startDate: string;
   /** `null` while this is the weight currently in use. */

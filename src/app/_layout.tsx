@@ -1,20 +1,16 @@
 import { Stack } from 'expo-router';
-import { SQLiteProvider } from 'expo-sqlite';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, View } from 'react-native';
 
 import { AuthProvider, useAuth } from '../lib/auth/AuthContext';
-import { DATABASE_NAME, migrateDatabase } from '../lib/db';
 import { colors } from '../theme';
 
 export default function RootLayout() {
   return (
-    <SQLiteProvider databaseName={DATABASE_NAME} onInit={migrateDatabase}>
-      <AuthProvider>
-        <StatusBar style="dark" />
-        <RootNavigator />
-      </AuthProvider>
-    </SQLiteProvider>
+    <AuthProvider>
+      <StatusBar style="dark" />
+      <RootNavigator />
+    </AuthProvider>
   );
 }
 

@@ -1,212 +1,131 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { Link, router, Stack, useLocalSearchParams } from 'expo-router';
-import { useSQLiteContext } from 'expo-sqlite';
 import { useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { Button, Card, EmptyState, ErrorBanner, TextField } from '../../../components/ui';
-import { useCurrentUser } from '../../../lib/auth/AuthContext';
-import { formatDay, toDayString } from '../../../lib/dates';
-import { formatSetsReps, formatWeight, parsePositiveNumber } from '../../../lib/format';
+import { Button, Card, EmptyState, ErrorBanner } from '../../../components/ui';
+import { confirmAction } from '../../../lib/confirm';
+import { moveExercise } from '../../../lib/exercises';
+import { countLabel, describeExercise } from '../../../lib/format';
 import { useLoadOnFocus } from '../../../lib/useLoadOnFocus';
-import { summarizePeriod } from '../../../lib/weightHistory';
-import { changeWeight, deleteWorkout, getWeightHistory, getWorkout } from '../../../lib/workouts';
-import { colors, radius, spacing } from '../../../theme';
+import { deleteWorkout, getWorkout } from '../../../lib/workouts';
+import { colors, spacing } from '../../../theme';
 
 export default function WorkoutDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const workoutId = Number(id);
-  const db = useSQLiteContext();
-  const user = useCurrentUser();
-  const [newWeight, setNewWeight] = useState('');
-  const [saving, setSaving] = useState(false);
+  const { id: workoutId } = useLocalSearchParams<{ id: string }>();
   const [error, setError] = useState<string | null>(null);
-
-  const {
-    data,
-    error: loadError,
-    reload,
-  } = useLoadOnFocus(async () => {
-    const workout = await getWorkout(db, user.id, workoutId);
-    const history = workout ? await getWeightHistory(db, workoutId) : [];
-    return { workout, history };
-  }, [db, user.id, workoutId]);
+  const { data, error: loadError, reload } = useLoadOnFocus(
+    async () => ({ workout: await getWorkout(workoutId) }),
+    [workoutId],
+  );
 
   if (loadError) return <EmptyState title="Something went wrong" message={loadError} />;
   if (!data) return <ActivityIndicator style={{ marginTop: 32 }} />;
-  const { workout, history } = data;
+  const { workout } = data;
   if (!workout) return <EmptyState title="Workout not found" message="It may have been deleted." />;
+  const { exercises } = workout;
 
-  const today = toDayString();
-  const periods = history.map((p) => ({ ...summarizePeriod(p, today), sessions: p.sessions }));
-  const current = periods.find((p) => p.isCurrent);
-  const setsReps = formatSetsReps(workout.sets, workout.reps);
-
-  async function saveWeight() {
-    const value = parsePositiveNumber(newWeight);
-    if (value === null) return setError('Enter a weight greater than 0.');
-    setError(null);
-    setSaving(true);
+  async function move(exerciseId: string, direction: -1 | 1) {
     try {
-      await changeWeight(db, workoutId, value);
-      setNewWeight('');
+      await moveExercise(workoutId, exerciseId, direction);
       reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not save the weight.');
-    } finally {
-      setSaving(false);
+      setError(e instanceof Error ? e.message : 'Could not reorder the exercises.');
     }
   }
 
-  function confirmDelete() {
-    Alert.alert(
+  async function confirmDelete() {
+    const ok = await confirmAction(
       `Delete ${workout!.name}?`,
-      'This also removes its weight history and takes it off your schedule.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            await deleteWorkout(db, user.id, workoutId);
-            router.back();
-          },
-        },
-      ],
+      'This also deletes its exercises and their weight history, and takes it off your schedule.',
+      'Delete',
     );
+    if (!ok) return;
+    try {
+      await deleteWorkout(workoutId);
+      router.back();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not delete the workout.');
+    }
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+    <ScrollView contentContainerStyle={styles.content}>
       <Stack.Screen
         options={{
           title: workout.name,
           headerRight: () => (
-            <Link
-              href={{ pathname: '/workout/edit/[id]', params: { id: String(workoutId) } }}
-              style={styles.headerLink}>
+            <Link href={{ pathname: '/workout/edit/[id]', params: { id: workoutId } }} style={styles.headerLink}>
               Edit
             </Link>
           ),
         }}
       />
+      <ErrorBanner message={error} />
+      {workout.notes ? <Text style={styles.notes}>{workout.notes}</Text> : null}
 
-      {setsReps || workout.notes ? (
-        <Card style={styles.section}>
-          {setsReps ? <Text style={styles.big}>{setsReps}</Text> : null}
-          {workout.notes ? <Text style={styles.notes}>{workout.notes}</Text> : null}
-        </Card>
-      ) : null}
-
-      {workout.usesWeight ? (
-        <>
-          <Card style={styles.section}>
-            <Text style={styles.caption}>Current weight</Text>
-            {current ? (
-              <>
-                <Text style={styles.weight}>{formatWeight(current.weight, workout.unit)}</Text>
-                <Text style={styles.muted}>
-                  Since {formatDay(current.startDate)} · {current.durationLabel} · {current.sessions}{' '}
-                  {current.sessions === 1 ? 'session' : 'sessions'}
-                </Text>
-              </>
-            ) : (
-              <Text style={styles.muted}>No weight set yet.</Text>
-            )}
-
-            <View style={styles.changeRow}>
-              <View style={styles.flex}>
-                <TextField
-                  label={current ? `New weight (${workout.unit})` : `Weight (${workout.unit})`}
-                  value={newWeight}
-                  onChangeText={setNewWeight}
-                  keyboardType="decimal-pad"
-                  placeholder={current ? String(current.weight) : '20'}
-                  onSubmitEditing={saveWeight}
-                />
+      <Text style={styles.heading}>{countLabel(exercises.length, 'exercise')}</Text>
+      <Card style={styles.list}>
+        {exercises.length === 0 ? (
+          <Text style={styles.muted}>Add the exercises you do in this workout.</Text>
+        ) : (
+          exercises.map((exercise, index) => {
+            const detail = describeExercise(exercise);
+            return (
+              <View key={exercise.id} style={[styles.item, index > 0 && styles.itemBorder]}>
+                <Text style={styles.order}>{index + 1}</Text>
+                <Link href={{ pathname: '/exercise/[id]', params: { id: exercise.id } }} asChild>
+                  <Pressable style={styles.flex}>
+                    <Text style={styles.itemName}>{exercise.name}</Text>
+                    {detail ? <Text style={styles.muted}>{detail}</Text> : null}
+                  </Pressable>
+                </Link>
+                <Pressable
+                  accessibilityLabel="Move up"
+                  disabled={index === 0}
+                  onPress={() => move(exercise.id, -1)}
+                  hitSlop={6}>
+                  <Ionicons name="chevron-up" size={20} color={index === 0 ? colors.border : colors.muted} />
+                </Pressable>
+                <Pressable
+                  accessibilityLabel="Move down"
+                  disabled={index === exercises.length - 1}
+                  onPress={() => move(exercise.id, 1)}
+                  hitSlop={6}>
+                  <Ionicons
+                    name="chevron-down"
+                    size={20}
+                    color={index === exercises.length - 1 ? colors.border : colors.muted}
+                  />
+                </Pressable>
               </View>
-              <Button
-                title={current ? 'Change' : 'Set'}
-                onPress={saveWeight}
-                loading={saving}
-                disabled={!newWeight.trim()}
-                style={styles.changeButton}
-              />
-            </View>
-            <ErrorBanner message={error} />
-            {current ? (
-              <Text style={styles.hint}>
-                Your previous weights stay in the history below, with how long you used each one.
-              </Text>
-            ) : null}
-          </Card>
+            );
+          })
+        )}
+      </Card>
 
-          <Text style={styles.heading}>Weight history</Text>
-          {periods.length === 0 ? (
-            <Text style={styles.muted}>Weights you set will show up here.</Text>
-          ) : (
-            <View style={styles.timeline}>
-              {periods.map((p) => (
-                <View key={p.id} style={[styles.period, p.isCurrent && styles.periodCurrent]}>
-                  <View style={styles.periodTop}>
-                    <Text style={styles.periodWeight}>{formatWeight(p.weight, workout.unit)}</Text>
-                    <Text style={[styles.badge, p.isCurrent && styles.badgeCurrent]}>
-                      {p.weeks} {p.weeks === 1 ? 'week' : 'weeks'}
-                    </Text>
-                  </View>
-                  <Text style={styles.muted}>
-                    {formatDay(p.startDate)} – {p.endDate ? formatDay(p.endDate) : 'now'} ({p.durationLabel})
-                  </Text>
-                  <Text style={styles.muted}>
-                    {p.sessions} {p.sessions === 1 ? 'session' : 'sessions'} completed
-                  </Text>
-                </View>
-              ))}
-            </View>
-          )}
-        </>
-      ) : null}
-
+      <Link href={{ pathname: '/exercise/new', params: { workoutId } }} asChild>
+        <Button title="Add exercise" />
+      </Link>
+      <Link href={{ pathname: '/schedule/add', params: { workoutId } }} asChild>
+        <Button title="Add to schedule" variant="secondary" />
+      </Link>
       <Button title="Delete workout" variant="ghost" onPress={confirmDelete} style={styles.delete} />
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  content: { padding: spacing.lg, paddingBottom: spacing.xl * 2 },
+  content: { padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xl * 2 },
   headerLink: { color: colors.primary, fontSize: 17 },
-  section: { marginBottom: spacing.lg },
-  big: { fontSize: 22, fontWeight: '700', color: colors.text },
-  notes: { fontSize: 15, color: colors.text, marginTop: spacing.xs },
-  caption: { fontSize: 13, fontWeight: '600', color: colors.muted, textTransform: 'uppercase' },
-  weight: { fontSize: 36, fontWeight: '800', color: colors.text, marginVertical: spacing.xs },
-  muted: { fontSize: 14, color: colors.muted },
-  hint: { fontSize: 13, color: colors.muted },
-  changeRow: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.sm, marginTop: spacing.lg },
-  changeButton: { marginBottom: spacing.md },
+  notes: { fontSize: 15, color: colors.text },
+  heading: { fontSize: 18, fontWeight: '700', color: colors.text },
+  list: { paddingVertical: spacing.sm },
+  item: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.md },
+  itemBorder: { borderTopWidth: 1, borderTopColor: colors.border },
+  order: { width: 20, color: colors.muted, fontWeight: '600' },
   flex: { flex: 1 },
-  heading: { fontSize: 18, fontWeight: '700', color: colors.text, marginBottom: spacing.sm },
-  timeline: { gap: spacing.sm },
-  period: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.md,
-    gap: 2,
-  },
-  periodCurrent: { borderColor: colors.primary },
-  periodTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  periodWeight: { fontSize: 18, fontWeight: '700', color: colors.text },
-  badge: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.muted,
-    backgroundColor: colors.background,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: 999,
-    overflow: 'hidden',
-  },
-  badgeCurrent: { color: colors.primary, backgroundColor: colors.primarySoft },
-  delete: { marginTop: spacing.xl },
+  itemName: { fontSize: 16, color: colors.text, fontWeight: '500' },
+  muted: { fontSize: 14, color: colors.muted },
+  delete: { marginTop: spacing.lg },
 });

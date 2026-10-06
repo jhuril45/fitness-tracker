@@ -5,7 +5,7 @@ import { StyleSheet, Text } from 'react-native';
 import { AuthScreen } from '../components/AuthForm';
 import { Button, ErrorBanner, TextField } from '../components/ui';
 import { useAuth } from '../lib/auth/AuthContext';
-import { MIN_PASSWORD_LENGTH } from '../lib/auth/localAuth';
+import { MIN_PASSWORD_LENGTH } from '../lib/auth/back4appAuth';
 import { colors, spacing } from '../theme';
 
 export default function RegisterScreen() {

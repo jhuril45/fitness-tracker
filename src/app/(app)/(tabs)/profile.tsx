@@ -1,4 +1,3 @@
-import { useSQLiteContext } from 'expo-sqlite';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Button, Card } from '../../../components/ui';
@@ -9,15 +8,14 @@ import { listWorkouts } from '../../../lib/workouts';
 import { colors, spacing } from '../../../theme';
 
 export default function ProfileScreen() {
-  const db = useSQLiteContext();
   const user = useCurrentUser();
   const { logout } = useAuth();
   const { data } = useLoadOnFocus(
     async () => ({
-      workouts: (await listWorkouts(db, user.id)).length,
-      sessions: await countCompletions(db, user.id),
+      workouts: (await listWorkouts(user.id)).length,
+      sessions: await countCompletions(user.id),
     }),
-    [db, user.id],
+    [user.id],
   );
 
   return (
@@ -33,7 +31,7 @@ export default function ProfileScreen() {
         </Card>
         <Card style={styles.stat}>
           <Text style={styles.statValue}>{data?.sessions ?? '–'}</Text>
-          <Text style={styles.statLabel}>Sessions done</Text>
+          <Text style={styles.statLabel}>Exercises done</Text>
         </Card>
       </View>
       <Button title="Sign out" variant="secondary" onPress={logout} />

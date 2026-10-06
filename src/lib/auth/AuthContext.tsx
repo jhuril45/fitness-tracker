@@ -1,7 +1,7 @@
-import { useSQLiteContext } from 'expo-sqlite';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
-import { createLocalAuth } from './localAuth';
+import { setInvalidSessionHandler } from '../back4app';
+import { createBack4AppAuth } from './back4appAuth';
 import type { AuthService, User } from './types';
 
 type AuthState = {
@@ -23,8 +23,7 @@ export function AuthProvider({
   /** Override to use a hosted backend instead of on-device accounts. */
   service?: AuthService;
 }) {
-  const db = useSQLiteContext();
-  const auth = useMemo(() => service ?? createLocalAuth(db), [service, db]);
+  const auth = useMemo(() => service ?? createBack4AppAuth(), [service]);
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -34,6 +33,15 @@ export function AuthProvider({
       .then(setUser)
       .catch(() => setUser(null))
       .finally(() => setIsLoading(false));
+  }, [auth]);
+
+  // If the server revokes the session mid-use, drop back to the sign-in screen.
+  useEffect(() => {
+    setInvalidSessionHandler(() => {
+      auth.logout().catch(() => {});
+      setUser(null);
+    });
+    return () => setInvalidSessionHandler(null);
   }, [auth]);
 
   const register = useCallback<AuthService['register']>(

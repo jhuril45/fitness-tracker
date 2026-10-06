@@ -1,13 +1,14 @@
 export type User = {
-  id: number;
+  /** Back4App (Parse) user objectId. */
+  id: string;
   name: string;
   email: string;
 };
 
 /**
  * Everything the app needs from an auth provider. The app only talks to this
- * interface, so the on-device implementation (`localAuth.ts`) can be swapped
- * for a hosted backend such as Supabase or Firebase without touching screens.
+ * interface, so the Back4App implementation (`back4appAuth.ts`) can be swapped
+ * for another backend without touching screens.
  */
 export interface AuthService {
   register(input: { name: string; email: string; password: string }): Promise<User>;

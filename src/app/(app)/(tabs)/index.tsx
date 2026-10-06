@@ -1,16 +1,17 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Link } from 'expo-router';
-import { useSQLiteContext } from 'expo-sqlite';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { Button, Card, EmptyState } from '../../../components/ui';
+import { Accordion, AccordionAction, AccordionActions } from '../../../components/Accordion';
+import { Skeleton } from '../../../components/Skeleton';
+import { Button, Card, EmptyState, ErrorBanner } from '../../../components/ui';
 import { useCurrentUser } from '../../../lib/auth/AuthContext';
 import { parseDayString, toDayString } from '../../../lib/dates';
-import { formatSetsReps, formatWeight } from '../../../lib/format';
-import { getDayPlan, markDone, markNotDone, type PlannedWorkout } from '../../../lib/schedule';
+import { describeExercise } from '../../../lib/format';
+import { getDayPlan, markDone, markNotDone, type PlannedExercise } from '../../../lib/schedule';
 import { useLoadOnFocus } from '../../../lib/useLoadOnFocus';
-import { colors, radius, spacing } from '../../../theme';
+import { colors, spacing } from '../../../theme';
 
 function shiftDay(day: string, by: number): string {
   const d = parseDayString(day);
@@ -29,30 +30,47 @@ function dayTitle(day: string, today: string): string {
   });
 }
 
-function describe(item: PlannedWorkout): string {
-  const weight = item.done ? item.doneWeight : item.currentWeight;
-  return [formatSetsReps(item.sets, item.reps), weight !== null ? formatWeight(weight, item.unit) : null]
-    .filter(Boolean)
-    .join(' · ');
+/** Shows the weight it was done with once checked off. */
+function describe(exercise: PlannedExercise): string {
+  return describeExercise(exercise, exercise.done ? exercise.doneWeight : exercise.currentWeight);
 }
 
 export default function TodayScreen() {
-  const db = useSQLiteContext();
   const user = useCurrentUser();
   const today = toDayString();
   const [date, setDate] = useState(today);
-  const { data: plan, reload } = useLoadOnFocus(() => getDayPlan(db, user.id, date), [db, user.id, date]);
+  const [error, setError] = useState<string | null>(null);
+  const { data: plan, error: loadError, reload } = useLoadOnFocus(() => getDayPlan(user.id, date), [user.id, date]);
 
   const isFuture = date > today;
-  const doneCount = plan?.filter((p) => p.done).length ?? 0;
-  const total = plan?.length ?? 0;
-  const next = plan?.find((p) => !p.done);
+  // Every exercise of the day in order, across all of the day's workouts.
+  const all =
+    plan?.flatMap((w) => w.exercises.map((exercise) => ({ itemId: w.id, workoutName: w.workoutName, exercise }))) ??
+    [];
+  const doneCount = all.filter((e) => e.exercise.done).length;
+  const next = all.find((e) => !e.exercise.done);
 
-  async function toggle(item: PlannedWorkout) {
+  // Workouts the user opened or closed by hand; the rest follow the default,
+  // which is to show only the workout holding the next exercise.
+  const [manual, setManual] = useState<Map<string, boolean>>(new Map());
+  const isExpanded = (itemId: string) => manual.get(itemId) ?? itemId === next?.itemId;
+  const toggleExpanded = (itemId: string) => setManual((prev) => new Map(prev).set(itemId, !isExpanded(itemId)));
+
+  function changeDate(day: string) {
+    setDate(day);
+    setManual(new Map());
+  }
+
+  async function toggle(itemId: string, exercise: PlannedExercise) {
     if (isFuture) return;
-    if (item.done) await markNotDone(db, item, date);
-    else await markDone(db, item, date);
-    reload();
+    setError(null);
+    try {
+      if (exercise.done) await markNotDone(itemId, exercise.id, date);
+      else await markDone(user.id, itemId, exercise, date);
+      reload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not update the exercise.');
+    }
   }
 
   return (
@@ -60,18 +78,21 @@ export default function TodayScreen() {
       <Text style={styles.greeting}>Hi {user.name.split(' ')[0]}</Text>
 
       <View style={styles.dayNav}>
-        <Pressable accessibilityLabel="Previous day" onPress={() => setDate(shiftDay(date, -1))} hitSlop={10}>
+        <Pressable accessibilityLabel="Previous day" onPress={() => changeDate(shiftDay(date, -1))} hitSlop={10}>
           <Ionicons name="chevron-back" size={24} color={colors.primary} />
         </Pressable>
-        <Pressable onPress={() => setDate(today)} disabled={date === today}>
+        <Pressable onPress={() => changeDate(today)} disabled={date === today}>
           <Text style={styles.dayTitle}>{dayTitle(date, today)}</Text>
         </Pressable>
-        <Pressable accessibilityLabel="Next day" onPress={() => setDate(shiftDay(date, 1))} hitSlop={10}>
+        <Pressable accessibilityLabel="Next day" onPress={() => changeDate(shiftDay(date, 1))} hitSlop={10}>
           <Ionicons name="chevron-forward" size={24} color={colors.primary} />
         </Pressable>
       </View>
+      <ErrorBanner message={error ?? loadError} />
 
-      {plan && total === 0 ? (
+      {!plan && !loadError ? <DayPlanSkeleton /> : null}
+
+      {plan && plan.length === 0 ? (
         <>
           <EmptyState title="Rest day" message="Nothing is scheduled for this day." />
           <Link
@@ -82,75 +103,138 @@ export default function TodayScreen() {
         </>
       ) : null}
 
-      {plan && total > 0 ? (
+      {plan && plan.length > 0 ? (
         <>
-          <View style={styles.progressRow}>
-            <Text style={styles.progressText}>
-              {doneCount} of {total} done
-            </Text>
-          </View>
-          <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: `${(doneCount / total) * 100}%` }]} />
-          </View>
+          {all.length > 0 ? (
+            <>
+              <Text style={styles.progressText}>
+                {doneCount} of {all.length} exercises done
+              </Text>
+              <View style={styles.progressTrack}>
+                <View style={[styles.progressFill, { width: `${(doneCount / all.length) * 100}%` }]} />
+              </View>
+            </>
+          ) : null}
 
           {next ? (
             <Card style={styles.nextCard}>
-              <Text style={styles.nextCaption}>{doneCount === 0 ? 'Start with' : 'Up next'}</Text>
-              <Text style={styles.nextName}>{next.workoutName}</Text>
-              {describe(next) ? <Text style={styles.nextDetail}>{describe(next)}</Text> : null}
+              <Text style={styles.nextCaption}>
+                {doneCount === 0 ? 'Start with' : 'Up next'} · {next.workoutName}
+              </Text>
+              <Text style={styles.nextName}>{next.exercise.name}</Text>
+              {describe(next.exercise) ? <Text style={styles.nextDetail}>{describe(next.exercise)}</Text> : null}
               {isFuture ? (
                 <Text style={styles.muted}>You can check this off on the day.</Text>
               ) : (
-                <Button title="Mark as done" onPress={() => toggle(next)} style={styles.nextButton} />
+                <Button
+                  title="Mark as done"
+                  onPress={() => toggle(next.itemId, next.exercise)}
+                  style={styles.nextButton}
+                />
               )}
             </Card>
-          ) : (
+          ) : all.length > 0 ? (
             <Card style={[styles.nextCard, styles.allDone]}>
               <Ionicons name="checkmark-circle" size={36} color={colors.success} />
               <Text style={styles.nextName}>All done</Text>
-              <Text style={styles.muted}>Every workout for this day is checked off.</Text>
+              <Text style={styles.muted}>Every exercise for this day is checked off.</Text>
             </Card>
-          )}
+          ) : null}
 
-          <Text style={styles.heading}>Plan</Text>
-          {plan.map((item, index) => (
-            <Pressable
-              key={item.id}
-              accessibilityRole="checkbox"
-              accessibilityState={{ checked: item.done, disabled: isFuture }}
-              onPress={() => toggle(item)}
-              disabled={isFuture}
-              style={[styles.item, item === next && styles.itemNext]}>
-              <Ionicons
-                name={item.done ? 'checkmark-circle' : 'ellipse-outline'}
-                size={26}
-                color={item.done ? colors.success : colors.muted}
-              />
-              <View style={styles.flex}>
-                <Text style={[styles.itemName, item.done && styles.itemDone]}>
-                  {index + 1}. {item.workoutName}
-                </Text>
-                {describe(item) ? <Text style={styles.muted}>{describe(item)}</Text> : null}
-              </View>
-              <Link href={{ pathname: '/workout/[id]', params: { id: String(item.workoutId) } }} asChild>
-                <Pressable accessibilityLabel={`Open ${item.workoutName}`} hitSlop={8}>
-                  <Ionicons name="information-circle-outline" size={22} color={colors.muted} />
-                </Pressable>
-              </Link>
-            </Pressable>
-          ))}
+          {plan.map((workout) => {
+            const done = workout.exercises.filter((e) => e.done).length;
+            const total = workout.exercises.length;
+            return (
+              <Accordion
+                key={workout.id}
+                icon={total > 0 && done === total ? 'checkmark-circle-outline' : 'barbell-outline'}
+                title={workout.workoutName}
+                subtitle={total === 0 ? 'No exercises yet' : `${done} of ${total} done`}
+                expanded={isExpanded(workout.id)}
+                onToggle={() => toggleExpanded(workout.id)}>
+                {total === 0 ? <Text style={styles.empty}>Add exercises to this workout first.</Text> : null}
+                {workout.exercises.map((exercise, index) => (
+                  <Pressable
+                    key={exercise.id}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: exercise.done, disabled: isFuture }}
+                    onPress={() => toggle(workout.id, exercise)}
+                    disabled={isFuture}
+                    style={[styles.item, index > 0 && styles.itemBorder]}>
+                    <Ionicons
+                      name={exercise.done ? 'checkmark-circle' : 'ellipse-outline'}
+                      size={26}
+                      color={exercise.done ? colors.success : exercise === next?.exercise ? colors.primary : colors.muted}
+                    />
+                    <View style={styles.flex}>
+                      <Text
+                        style={[
+                          styles.itemName,
+                          exercise === next?.exercise && styles.itemNext,
+                          exercise.done && styles.itemDone,
+                        ]}>
+                        {index + 1}. {exercise.name}
+                      </Text>
+                      {describe(exercise) ? <Text style={styles.muted}>{describe(exercise)}</Text> : null}
+                    </View>
+                    <Link href={{ pathname: '/exercise/[id]', params: { id: exercise.id } }} asChild>
+                      <Pressable accessibilityLabel={`Open ${exercise.name}`} hitSlop={8}>
+                        <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+                      </Pressable>
+                    </Link>
+                  </Pressable>
+                ))}
+                <AccordionActions>
+                  <AccordionAction
+                    href={{ pathname: '/workout/[id]', params: { id: workout.workoutId } }}
+                    icon="information-circle-outline"
+                    label="Workout details"
+                  />
+                </AccordionActions>
+              </Accordion>
+            );
+          })}
         </>
       ) : null}
     </ScrollView>
   );
 }
 
+/** Stands in for the progress bar, Up next card and workouts while a day loads. */
+function DayPlanSkeleton() {
+  return (
+    <View accessibilityLabel="Loading" accessibilityRole="progressbar" style={styles.skeleton}>
+      <Skeleton width={140} height={14} />
+      <Skeleton height={8} />
+      <Card style={styles.skeletonCard}>
+        <Skeleton width={120} height={12} />
+        <Skeleton width="70%" height={24} />
+        <Skeleton width={90} height={14} />
+        <Skeleton height={48} style={styles.skeletonButton} />
+      </Card>
+      {[0, 1].map((i) => (
+        <Card key={i} style={styles.skeletonRow}>
+          <Skeleton width={22} height={22} />
+          <View style={styles.skeletonText}>
+            <Skeleton width="45%" height={16} />
+            <Skeleton width="25%" height={12} />
+          </View>
+        </Card>
+      ))}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  content: { padding: spacing.lg, gap: spacing.md },
+  skeleton: { gap: spacing.md },
+  skeletonCard: { gap: spacing.sm },
+  skeletonButton: { marginTop: spacing.md },
+  skeletonRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  skeletonText: { flex: 1, gap: spacing.xs },
+  content: { padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xl * 2 },
   greeting: { fontSize: 15, color: colors.muted },
   dayNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   dayTitle: { fontSize: 24, fontWeight: '800', color: colors.text },
-  progressRow: { flexDirection: 'row', justifyContent: 'space-between' },
   progressText: { fontSize: 14, color: colors.muted, fontWeight: '600' },
   progressTrack: { height: 8, backgroundColor: colors.border, borderRadius: 999, overflow: 'hidden' },
   progressFill: { height: '100%', backgroundColor: colors.success },
@@ -160,18 +244,10 @@ const styles = StyleSheet.create({
   nextName: { fontSize: 24, fontWeight: '800', color: colors.text },
   nextDetail: { fontSize: 16, color: colors.text },
   nextButton: { marginTop: spacing.md },
-  heading: { fontSize: 18, fontWeight: '700', color: colors.text, marginTop: spacing.sm },
-  item: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.md,
-  },
-  itemNext: { borderColor: colors.primary },
+  empty: { fontSize: 14, color: colors.muted, paddingVertical: spacing.md },
+  item: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.md },
+  itemBorder: { borderTopWidth: 1, borderTopColor: colors.border },
+  itemNext: { color: colors.primary },
   flex: { flex: 1 },
   itemName: { fontSize: 16, fontWeight: '600', color: colors.text },
   itemDone: { color: colors.muted, textDecorationLine: 'line-through' },
