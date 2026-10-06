@@ -175,12 +175,5 @@ const webGrab = (Platform.OS === 'web' ? { cursor: 'grab', userSelect: 'none', t
 
 const styles = StyleSheet.create({
   handle: { paddingHorizontal: 4, justifyContent: 'center', alignSelf: 'stretch' },
-  lifted: {
-    zIndex: 10,
-    elevation: 6,
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-  },
+  lifted: { zIndex: 10, elevation: 6, boxShadow: '0 4px 8px rgba(0, 0, 0, 0.15)' },
 });

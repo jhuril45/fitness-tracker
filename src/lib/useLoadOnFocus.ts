@@ -39,5 +39,14 @@ export function useLoadOnFocus<T>(load: () => Promise<T>, deps: React.Dependency
 
   const current = result.run === run;
   const reload = useCallback(() => setVersion((v) => v + 1), []);
-  return { data: current ? result.data : null, error: current ? result.error : null, reload };
+  /**
+   * Updates the loaded data in place, e.g. right after a save succeeds, so the
+   * screen doesn't wait for a full reload to show it. Ignored while loading.
+   */
+  const mutate = useCallback(
+    (update: (data: T) => T) =>
+      setResult((prev) => (prev.run === run && prev.data !== null ? { ...prev, data: update(prev.data) } : prev)),
+    [run],
+  );
+  return { data: current ? result.data : null, error: current ? result.error : null, reload, mutate };
 }

@@ -1,13 +1,14 @@
-import { Link, router, Stack, useLocalSearchParams } from 'expo-router';
+import { Link, Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { useConfirm } from '../../../components/ConfirmDialog';
 import { Button, Card, EmptyState, ErrorBanner, TextField } from '../../../components/ui';
 import { useCurrentUser } from '../../../lib/auth/AuthContext';
-import { confirmAction } from '../../../lib/confirm';
 import { formatDay, toDayString } from '../../../lib/dates';
 import { changeWeight, deleteExercise, getExercise, getWeightHistory } from '../../../lib/exercises';
 import { formatSetsReps, formatWeight, parsePositiveNumber } from '../../../lib/format';
+import { goBack } from '../../../lib/navigation';
 import { useLoadOnFocus } from '../../../lib/useLoadOnFocus';
 import { summarizePeriod } from '../../../lib/weightHistory';
 import { colors, radius, spacing } from '../../../theme';
@@ -15,6 +16,7 @@ import { colors, radius, spacing } from '../../../theme';
 export default function ExerciseDetailScreen() {
   const { id: exerciseId } = useLocalSearchParams<{ id: string }>();
   const user = useCurrentUser();
+  const confirm = useConfirm();
   const [newWeight, setNewWeight] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -55,18 +57,14 @@ export default function ExerciseDetailScreen() {
   }
 
   async function confirmDelete() {
-    const ok = await confirmAction(
-      `Delete ${exercise!.name}?`,
-      'This also removes its weight history and check-offs.',
-      'Delete',
-    );
-    if (!ok) return;
-    try {
-      await deleteExercise(exerciseId);
-      router.back();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not delete the exercise.');
-    }
+    const deleted = await confirm({
+      title: `Delete ${exercise!.name}?`,
+      message: 'This also removes its weight history and check-offs.',
+      confirmLabel: 'Delete',
+      destructive: true,
+      onConfirm: () => deleteExercise(exerciseId),
+    });
+    if (deleted) goBack('/workouts');
   }
 
   return (

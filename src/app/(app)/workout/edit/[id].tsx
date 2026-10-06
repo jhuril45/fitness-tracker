@@ -1,8 +1,9 @@
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { ActivityIndicator } from 'react-native';
 
 import { WorkoutForm } from '../../../../components/WorkoutForm';
 import { EmptyState } from '../../../../components/ui';
+import { goBack } from '../../../../lib/navigation';
 import { useLoadOnFocus } from '../../../../lib/useLoadOnFocus';
 import { getWorkout, updateWorkout } from '../../../../lib/workouts';
 
@@ -21,7 +22,7 @@ export default function EditWorkoutScreen() {
       submitLabel="Save changes"
       onSubmit={async (input) => {
         await updateWorkout(workoutId, input);
-        router.back();
+        goBack({ pathname: '/workout/[id]', params: { id: workoutId } });
       }}
     />
   );

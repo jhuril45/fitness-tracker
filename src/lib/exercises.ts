@@ -164,15 +164,8 @@ export async function deleteExercise(exerciseId: string): Promise<void> {
   await destroy('Exercise', exerciseId);
 }
 
-/** Move an exercise one place earlier (-1) or later (+1) within its workout. */
-export async function moveExercise(workoutId: string, exerciseId: string, direction: -1 | 1): Promise<void> {
-  const ids = (
-    await find('Exercise', { workout: workoutPointer(workoutId) }, { order: 'position,createdAt', keys: 'objectId' })
-  ).map((row) => row.objectId);
-  const from = ids.indexOf(exerciseId);
-  const to = from + direction;
-  if (from < 0 || to < 0 || to >= ids.length) return;
-  [ids[from], ids[to]] = [ids[to], ids[from]];
+/** Saves a workout's exercise order, given every exercise id in the new order. One request. */
+export async function saveExerciseOrder(ids: string[]): Promise<void> {
   await batch(ids.map((id, position) => ({ method: 'PUT', path: `/classes/Exercise/${id}`, body: { position } })));
 }
 

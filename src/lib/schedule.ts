@@ -5,7 +5,6 @@ import {
   create,
   find,
   destroy,
-  get,
   owned,
   pointer,
   type Pointer,
@@ -38,6 +37,8 @@ export type PlannedExercise = Exercise & {
   done: boolean;
   /** Weight recorded when it was checked off. */
   doneWeight: number | null;
+  /** The Completion rows behind `done`, so unchecking can delete them directly. */
+  completionIds: string[];
 };
 
 export type PlannedWorkout = Omit<ScheduleItem, 'exercises'> & { exercises: PlannedExercise[] };
@@ -92,16 +93,22 @@ export async function getDayPlan(userId: string, date: string): Promise<PlannedW
     loadItems(userId, weekdayOf(date)),
     find<CompletionObject>('Completion', { owner: userPointer(userId), date }),
   ]);
-  const done = new Map(
-    completions
-      .filter((c) => c.scheduleItem)
-      .map((c) => [`${c.scheduleItem!.objectId}:${c.exercise.objectId}`, c]),
-  );
+  const done = new Map<string, (CompletionObject & { objectId: string })[]>();
+  for (const c of completions) {
+    if (!c.scheduleItem) continue;
+    const key = `${c.scheduleItem.objectId}:${c.exercise.objectId}`;
+    done.set(key, [...(done.get(key) ?? []), c]);
+  }
   return items.map((item) => ({
     ...item,
     exercises: item.exercises.map((exercise) => {
-      const completion = done.get(`${item.id}:${exercise.id}`);
-      return { ...exercise, done: completion !== undefined, doneWeight: completion?.weight ?? null };
+      const rows = done.get(`${item.id}:${exercise.id}`) ?? [];
+      return {
+        ...exercise,
+        done: rows.length > 0,
+        doneWeight: rows[0]?.weight ?? null,
+        completionIds: rows.map((r) => r.objectId),
+      };
     }),
   }));
 }
@@ -145,46 +152,31 @@ export async function removeFromSchedule(itemId: string): Promise<void> {
   await destroy('ScheduleItem', itemId);
 }
 
-/** Move a workout one place earlier (-1) or later (+1) within its day. */
-export async function moveScheduleItem(userId: string, itemId: string, direction: -1 | 1): Promise<void> {
-  const item = await get<ScheduleObject>('ScheduleItem', itemId);
-  if (!item) return;
-  const ids = (
-    await find(
-      'ScheduleItem',
-      { owner: userPointer(userId), dayOfWeek: item.dayOfWeek },
-      { order: 'position,createdAt', keys: 'objectId' },
-    )
-  ).map((row) => row.objectId);
-  const from = ids.indexOf(itemId);
-  const to = from + direction;
-  if (to < 0 || to >= ids.length) return;
-  [ids[from], ids[to]] = [ids[to], ids[from]];
+/** Saves the order of a day's workouts, given every plan entry id in the new order. One request. */
+export async function saveScheduleOrder(itemIds: string[]): Promise<void> {
   await batch(
-    ids.map((id, position) => ({ method: 'PUT', path: `/classes/ScheduleItem/${id}`, body: { position } })),
+    itemIds.map((id, position) => ({ method: 'PUT', path: `/classes/ScheduleItem/${id}`, body: { position } })),
   );
 }
 
-function completionWhere(itemId: string, exerciseId: string, date: string) {
-  return { scheduleItem: schedulePointer(itemId), exercise: exercisePointer(exerciseId), date };
-}
-
-/** Check an exercise of a planned workout off for a date, recording the weight used. */
-export async function markDone(userId: string, itemId: string, exercise: Exercise, date: string): Promise<void> {
-  const where = completionWhere(itemId, exercise.id, date);
-  const already = await find('Completion', where, { limit: 1, keys: 'objectId' });
-  if (already.length > 0) return;
-  await create('Completion', {
-    ...where,
+/**
+ * Check an exercise of a planned workout off for a date, recording the weight
+ * used. One request; returns the new Completion's id.
+ */
+export async function markDone(userId: string, itemId: string, exercise: Exercise, date: string): Promise<string> {
+  return create('Completion', {
+    scheduleItem: schedulePointer(itemId),
+    exercise: exercisePointer(exercise.id),
     workout: workoutPointer(exercise.workoutId),
+    date,
     weight: exercise.currentWeight,
     ...owned(userId),
   });
 }
 
-export async function markNotDone(itemId: string, exerciseId: string, date: string): Promise<void> {
-  const rows = await find('Completion', completionWhere(itemId, exerciseId, date), { keys: 'objectId' });
-  await batch(rows.map((row) => ({ method: 'DELETE', path: `/classes/Completion/${row.objectId}` })));
+/** Uncheck an exercise by deleting the completions loaded with the day's plan. One request. */
+export async function markNotDone(exercise: PlannedExercise): Promise<void> {
+  await batch(exercise.completionIds.map((id) => ({ method: 'DELETE', path: `/classes/Completion/${id}` })));
 }
 
 /** How many exercises the user has checked off, ever. */

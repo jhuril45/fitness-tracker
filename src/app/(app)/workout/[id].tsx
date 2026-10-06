@@ -1,12 +1,13 @@
-import Ionicons from '@expo/vector-icons/Ionicons';
-import { Link, router, Stack, useLocalSearchParams } from 'expo-router';
+import { Link, Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { Button, Card, EmptyState, ErrorBanner } from '../../../components/ui';
-import { confirmAction } from '../../../lib/confirm';
-import { moveExercise } from '../../../lib/exercises';
+import { useConfirm } from '../../../components/ConfirmDialog';
+import { ArrowButton, Button, Card, EmptyState, ErrorBanner } from '../../../components/ui';
+import { saveExerciseOrder } from '../../../lib/exercises';
 import { countLabel, describeExercise } from '../../../lib/format';
+import { goBack } from '../../../lib/navigation';
+import { swapped } from '../../../lib/reorder';
 import { useLoadOnFocus } from '../../../lib/useLoadOnFocus';
 import { deleteWorkout, getWorkout } from '../../../lib/workouts';
 import { colors, spacing } from '../../../theme';
@@ -14,7 +15,10 @@ import { colors, spacing } from '../../../theme';
 export default function WorkoutDetailScreen() {
   const { id: workoutId } = useLocalSearchParams<{ id: string }>();
   const [error, setError] = useState<string | null>(null);
-  const { data, error: loadError, reload } = useLoadOnFocus(
+  /** The arrow waiting on the server, e.g. "<exerciseId>:-1". */
+  const [moving, setMoving] = useState<string | null>(null);
+  const confirm = useConfirm();
+  const { data, error: loadError, reload, mutate } = useLoadOnFocus(
     async () => ({ workout: await getWorkout(workoutId) }),
     [workoutId],
   );
@@ -26,27 +30,30 @@ export default function WorkoutDetailScreen() {
   const { exercises } = workout;
 
   async function move(exerciseId: string, direction: -1 | 1) {
+    const reordered = swapped(exercises, exercises.findIndex((e) => e.id === exerciseId), direction);
+    setError(null);
+    setMoving(`${exerciseId}:${direction}`);
     try {
-      await moveExercise(workoutId, exerciseId, direction);
+      await saveExerciseOrder(reordered.map((e) => e.id));
+      // Show the new order as soon as it's saved, then sync with the server quietly.
+      mutate((d) => (d.workout ? { workout: { ...d.workout, exercises: reordered } } : d));
       reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not reorder the exercises.');
+    } finally {
+      setMoving(null);
     }
   }
 
   async function confirmDelete() {
-    const ok = await confirmAction(
-      `Delete ${workout!.name}?`,
-      'This also deletes its exercises and their weight history, and takes it off your schedule.',
-      'Delete',
-    );
-    if (!ok) return;
-    try {
-      await deleteWorkout(workoutId);
-      router.back();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not delete the workout.');
-    }
+    const deleted = await confirm({
+      title: `Delete ${workout!.name}?`,
+      message: 'This also deletes its exercises and their weight history, and takes it off your schedule.',
+      confirmLabel: 'Delete',
+      destructive: true,
+      onConfirm: () => deleteWorkout(workoutId),
+    });
+    if (deleted) goBack('/workouts');
   }
 
   return (
@@ -80,24 +87,20 @@ export default function WorkoutDetailScreen() {
                     {detail ? <Text style={styles.muted}>{detail}</Text> : null}
                   </Pressable>
                 </Link>
-                <Pressable
-                  accessibilityLabel="Move up"
-                  disabled={index === 0}
+                <ArrowButton
+                  direction="up"
+                  label={`Move ${exercise.name} up`}
+                  disabled={index === 0 || moving !== null}
+                  loading={moving === `${exercise.id}:-1`}
                   onPress={() => move(exercise.id, -1)}
-                  hitSlop={6}>
-                  <Ionicons name="chevron-up" size={20} color={index === 0 ? colors.border : colors.muted} />
-                </Pressable>
-                <Pressable
-                  accessibilityLabel="Move down"
-                  disabled={index === exercises.length - 1}
+                />
+                <ArrowButton
+                  direction="down"
+                  label={`Move ${exercise.name} down`}
+                  disabled={index === exercises.length - 1 || moving !== null}
+                  loading={moving === `${exercise.id}:1`}
                   onPress={() => move(exercise.id, 1)}
-                  hitSlop={6}>
-                  <Ionicons
-                    name="chevron-down"
-                    size={20}
-                    color={index === exercises.length - 1 ? colors.border : colors.muted}
-                  />
-                </Pressable>
+                />
               </View>
             );
           })

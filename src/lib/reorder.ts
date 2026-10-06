@@ -1,0 +1,8 @@
+/** A copy of `list` with the item at `index` swapped with its neighbour one place up (-1) or down (+1). */
+export function swapped<T>(list: T[], index: number, direction: -1 | 1): T[] {
+  const to = index + direction;
+  if (to < 0 || to >= list.length) return list;
+  const next = [...list];
+  [next[index], next[to]] = [next[to], next[index]];
+  return next;
+}

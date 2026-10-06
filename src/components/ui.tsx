@@ -1,3 +1,4 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import {
   ActivityIndicator,
   Pressable,
@@ -45,6 +46,42 @@ export function Button({
         <ActivityIndicator color={variant === 'primary' || variant === 'danger' ? '#fff' : colors.primary} />
       ) : (
         <Text style={[styles.buttonText, buttonTextVariants[variant]]}>{title}</Text>
+      )}
+    </Pressable>
+  );
+}
+
+/** A small up/down reorder button that shows a spinner while its move is saving. */
+export function ArrowButton({
+  direction,
+  label,
+  disabled,
+  loading,
+  onPress,
+}: {
+  direction: 'up' | 'down';
+  label: string;
+  disabled: boolean;
+  loading: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled, busy: loading }}
+      disabled={disabled || loading}
+      onPress={onPress}
+      hitSlop={6}
+      style={styles.arrow}>
+      {loading ? (
+        <ActivityIndicator size="small" color={colors.primary} />
+      ) : (
+        <Ionicons
+          name={direction === 'up' ? 'chevron-up' : 'chevron-down'}
+          size={20}
+          color={disabled ? colors.border : colors.muted}
+        />
       )}
     </Pressable>
   );
@@ -135,6 +172,7 @@ const styles = StyleSheet.create({
   },
   buttonText: { fontSize: 16, fontWeight: '600' },
   pressed: { opacity: 0.8 },
+  arrow: { width: 24, height: 24, alignItems: 'center', justifyContent: 'center' },
   disabled: { opacity: 0.5 },
   field: { marginBottom: spacing.md },
   label: { fontSize: 14, fontWeight: '600', color: colors.text, marginBottom: spacing.xs },

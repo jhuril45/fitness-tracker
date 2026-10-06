@@ -2,6 +2,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
 
+import { ConfirmProvider } from '../components/ConfirmDialog';
 import { AuthProvider, useAuth } from '../lib/auth/AuthContext';
 import { colors } from '../theme';
 
@@ -11,12 +12,14 @@ const WEB_MAX_WIDTH = 480;
 export default function RootLayout() {
   return (
     <AuthProvider>
-      <StatusBar style="dark" />
-      <View style={styles.page}>
-        <View style={styles.app}>
-          <RootNavigator />
+      <ConfirmProvider>
+        <StatusBar style="dark" />
+        <View style={styles.page}>
+          <View style={styles.app}>
+            <RootNavigator />
+          </View>
         </View>
-      </View>
+      </ConfirmProvider>
     </AuthProvider>
   );
 }
