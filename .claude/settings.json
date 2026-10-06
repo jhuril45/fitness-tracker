@@ -7,7 +7,8 @@
       "PowerShell(Stop-Process -Id 7712 -Force -Confirm:$false)",
       "PowerShell(Get-NetTCPConnection -LocalPort 8082 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -Confirm:$false }; Get-NetTCPConnection -LocalPort 8082 -State Listen -ErrorAction SilentlyContinue | Measure-Object | Select-Object -ExpandProperty Count)",
       "PowerShell(Get-NetTCPConnection -LocalPort 8082 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -Confirm:$false }; 'stopped')",
-      "PowerShell(Get-NetTCPConnection -LocalPort 8082 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -Confirm:$false }; npx tsc --noEmit; if \\($?\\) { 'TSC_OK' })"
+      "PowerShell(Get-NetTCPConnection -LocalPort 8082 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -Confirm:$false }; npx tsc --noEmit; if \\($?\\) { 'TSC_OK' })",
+      "WebFetch(domain:docs.expo.dev)"
     ]
   },
   "enabledPlugins": {

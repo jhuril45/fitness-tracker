@@ -1,15 +1,22 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
 
 import { AuthProvider, useAuth } from '../lib/auth/AuthContext';
 import { colors } from '../theme';
+
+/** On a wide browser window the app is shown as a phone-sized column. */
+const WEB_MAX_WIDTH = 480;
 
 export default function RootLayout() {
   return (
     <AuthProvider>
       <StatusBar style="dark" />
-      <RootNavigator />
+      <View style={styles.page}>
+        <View style={styles.app}>
+          <RootNavigator />
+        </View>
+      </View>
     </AuthProvider>
   );
 }
@@ -38,3 +45,25 @@ function RootNavigator() {
     </Stack>
   );
 }
+
+const styles = StyleSheet.create({
+  page: {
+    flex: 1,
+    ...(Platform.OS === 'web' ? { alignItems: 'center', backgroundColor: '#E2E6EE' } : null),
+  },
+  app: {
+    flex: 1,
+    width: '100%',
+    backgroundColor: colors.background,
+    ...(Platform.OS === 'web'
+      ? {
+          maxWidth: WEB_MAX_WIDTH,
+          overflow: 'hidden',
+          borderLeftWidth: 1,
+          borderRightWidth: 1,
+          borderColor: colors.border,
+          boxShadow: '0 0 24px rgba(17, 24, 39, 0.08)',
+        }
+      : null),
+  },
+});
