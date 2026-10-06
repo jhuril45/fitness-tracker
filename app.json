@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "fitness-tracker-app",
+    "name": "Fitness Tracker",
     "slug": "fitness-tracker-app",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -20,6 +20,13 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-router",
+      "expo-sqlite",
+      "expo-secure-store",
+      "expo-font"
+    ],
+    "scheme": "fitnesstracker"
   }
 }
