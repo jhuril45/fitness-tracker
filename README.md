@@ -25,16 +25,23 @@ tracking the weight you lift over time, and following a daily/weekly workout pla
 1. Create an app on Back4App and copy its **Application ID** and **JavaScript key** from
    *App Settings > Security & Keys*.
 2. Copy `.env.example` to `.env.local` and fill in those two keys. Never use the Master Key in the app.
-3. Start the app:
+3. Deploy the Cloud Code: in the Back4App dashboard open **Cloud Code**, open `cloud/main.js`, replace
+   its contents with this repo's [`cloud/main.js`](cloud/main.js) and click **Deploy**. Redeploy it
+   whenever that file changes.
+4. Start the app:
 
 ```bash
 npm install
 npx expo start
 ```
 
-The app creates its classes (`Workout`, `Exercise`, `WeightPeriod`, `ScheduleItem`, `Completion`) the first time
-it writes to them. Every object stores an `owner` pointer and an ACL that only lets that user read
-and write it.
+Sign-up, sign-in and sign-out use Parse's standard endpoints. Every other read and write is a single
+call to a Cloud Code function, so each screen or action is one round trip. The functions run as the
+signed-in user, so access rules still apply and no Master Key is needed.
+
+The classes (`Workout`, `Exercise`, `WeightPeriod`, `ScheduleItem`, `Completion`) are created the
+first time something is saved to them. Every object stores an `owner` pointer and an ACL that only
+lets that user read and write it.
 
 Scan the QR code with the Expo Go app (SDK 57) on your phone, or press `a` / `i` for an Android
 emulator or iOS simulator, or `w` for the web.
@@ -44,6 +51,7 @@ Checks: `npm run typecheck`.
 ## Project layout
 
 ```
+cloud/main.js            Back4App Cloud Code: every data read and write
 src/app/                 Screens (Expo Router: every file is a route)
   _layout.tsx            Auth provider, sign-in guard
   sign-in.tsx, register.tsx
@@ -52,7 +60,7 @@ src/app/                 Screens (Expo Router: every file is a route)
   (app)/exercise/        Add, detail (weight history), edit
   (app)/schedule/add.tsx Add a workout to days of the week
 src/lib/
-  back4app.ts            Back4App (Parse REST) client
+  back4app.ts            Back4App client: auth requests and Cloud Code calls
   auth/                  AuthService interface, Back4App implementation, React context
   workouts.ts            Workouts
   exercises.ts           Exercises and weight history

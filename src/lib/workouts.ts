@@ -1,10 +1,9 @@
-import { batch, type BatchOp, create, destroy, find, get, owned, update, userPointer } from './back4app';
-import { addExercises, byWorkout, type Exercise, findExercises, type NewExercise, workoutPointer } from './exercises';
+import { callFunction } from './back4app';
+import { toDayString } from './dates';
+import type { Exercise, NewExercise } from './exercises';
 
-// Back4App classes:
-//   Workout  owner, name, notes
-//            A named routine such as "Chest day". Its steps are Exercise rows
-//            (see exercises.ts); ScheduleItem and Completion live in schedule.ts.
+// A workout is a named routine such as "Chest day" made of ordered exercises.
+// Read and written through the Cloud Code functions in `cloud/main.js`.
 
 export type Workout = {
   id: string;
@@ -16,54 +15,30 @@ export type Workout = {
 
 export type WorkoutInput = { name: string; notes: string };
 
-export type WorkoutObject = { name: string; notes?: string };
-
-function workoutFields(input: WorkoutInput) {
-  return { name: input.name.trim(), notes: input.notes.trim() };
+/** The user's workouts, sorted by name, each with its exercises. */
+export function listWorkouts(): Promise<Workout[]> {
+  return callFunction('listWorkouts');
 }
 
-export async function listWorkouts(userId: string): Promise<Workout[]> {
-  const owner = userPointer(userId);
-  const [rows, exercises] = await Promise.all([find<WorkoutObject>('Workout', { owner }), findExercises({ owner })]);
-  const grouped = byWorkout(exercises);
-  return rows
-    .map((row) => ({
-      id: row.objectId,
-      name: row.name,
-      notes: row.notes ?? '',
-      exercises: grouped.get(row.objectId) ?? [],
-    }))
-    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+export function getWorkout(workoutId: string): Promise<Workout | null> {
+  return callFunction('getWorkout', { workoutId });
 }
 
-export async function getWorkout(workoutId: string): Promise<Workout | null> {
-  const [row, exercises] = await Promise.all([
-    get<WorkoutObject>('Workout', workoutId),
-    findExercises({ workout: workoutPointer(workoutId) }),
-  ]);
-  return row ? { id: row.objectId, name: row.name, notes: row.notes ?? '', exercises } : null;
-}
-
-export async function createWorkout(userId: string, input: WorkoutInput, exercises: NewExercise[]): Promise<string> {
-  const id = await create('Workout', { ...workoutFields(input), ...owned(userId) });
-  await addExercises(userId, id, exercises);
+export async function createWorkout(workout: WorkoutInput, exercises: NewExercise[]): Promise<string> {
+  const { id } = await callFunction<{ id: string }>('createWorkout', { workout, exercises, today: toDayString() });
   return id;
 }
 
-export async function updateWorkout(workoutId: string, input: WorkoutInput): Promise<void> {
-  await update('Workout', workoutId, workoutFields(input));
+export async function updateWorkout(workoutId: string, workout: WorkoutInput): Promise<void> {
+  await callFunction('updateWorkout', { workoutId, workout });
 }
 
 /** Deletes the workout with its exercises, weight history, schedule entries and check-offs. */
 export async function deleteWorkout(workoutId: string): Promise<void> {
-  const where = { workout: workoutPointer(workoutId) };
-  const related = await Promise.all(
-    ['Exercise', 'WeightPeriod', 'ScheduleItem', 'Completion'].map(async (className) =>
-      (await find(className, where, { keys: 'objectId' })).map(
-        (row): BatchOp => ({ method: 'DELETE', path: `/classes/${className}/${row.objectId}` }),
-      ),
-    ),
-  );
-  await batch(related.flat());
-  await destroy('Workout', workoutId);
+  await callFunction('deleteWorkout', { workoutId });
+}
+
+/** The numbers shown on the Profile tab. */
+export function getProfileStats(): Promise<{ workouts: number; completions: number }> {
+  return callFunction('getProfileStats');
 }

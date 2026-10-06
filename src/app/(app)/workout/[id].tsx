@@ -113,7 +113,7 @@ export default function WorkoutDetailScreen() {
       <Link href={{ pathname: '/schedule/add', params: { workoutId } }} asChild>
         <Button title="Add to schedule" variant="secondary" />
       </Link>
-      <Button title="Delete workout" variant="ghost" onPress={confirmDelete} style={styles.delete} />
+      <Button title="Delete workout" variant="dangerSoft" onPress={confirmDelete} style={styles.delete} />
     </ScrollView>
   );
 }
