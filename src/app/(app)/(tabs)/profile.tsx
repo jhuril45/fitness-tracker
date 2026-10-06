@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Button, Card } from '../../../components/ui';
@@ -10,6 +11,7 @@ import { colors, spacing } from '../../../theme';
 export default function ProfileScreen() {
   const user = useCurrentUser();
   const { logout } = useAuth();
+  const [signingOut, setSigningOut] = useState(false);
   const { data } = useLoadOnFocus(
     async () => ({
       workouts: (await listWorkouts(user.id)).length,
@@ -17,6 +19,16 @@ export default function ProfileScreen() {
     }),
     [user.id],
   );
+
+  async function signOut() {
+    setSigningOut(true);
+    try {
+      await logout();
+    } catch {
+      // Signed out locally anyway; the screen unmounts on success.
+      setSigningOut(false);
+    }
+  }
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
@@ -34,7 +46,7 @@ export default function ProfileScreen() {
           <Text style={styles.statLabel}>Exercises done</Text>
         </Card>
       </View>
-      <Button title="Sign out" variant="secondary" onPress={logout} />
+      <Button title="Sign out" variant="secondary" onPress={signOut} loading={signingOut} />
     </ScrollView>
   );
 }

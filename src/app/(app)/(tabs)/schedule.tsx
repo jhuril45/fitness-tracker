@@ -4,17 +4,18 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Accordion, AccordionAction, AccordionActions } from '../../../components/Accordion';
-import { Button, ErrorBanner } from '../../../components/ui';
+import { useConfirm } from '../../../components/ConfirmDialog';
+import { ArrowButton, Button, ErrorBanner } from '../../../components/ui';
 import { useCurrentUser } from '../../../lib/auth/AuthContext';
-import { confirmAction } from '../../../lib/confirm';
 import { DAY_NAMES_LONG } from '../../../lib/dates';
 import { countLabel } from '../../../lib/format';
 import {
   getWeeklySchedule,
-  moveScheduleItem,
+  saveScheduleOrder,
   removeFromSchedule,
   type ScheduleItem,
 } from '../../../lib/schedule';
+import { swapped } from '../../../lib/reorder';
 import { useLoadOnFocus } from '../../../lib/useLoadOnFocus';
 import { colors, spacing } from '../../../theme';
 
@@ -28,11 +29,14 @@ function daySummary(items: ScheduleItem[]): string {
 
 export default function ScheduleScreen() {
   const user = useCurrentUser();
-  const { data: week, reload } = useLoadOnFocus(() => getWeeklySchedule(user.id), [user.id]);
+  const confirm = useConfirm();
+  const { data: week, reload, mutate } = useLoadOnFocus(() => getWeeklySchedule(user.id), [user.id]);
   const today = new Date().getDay();
   // Today starts open.
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set([today]));
   const [error, setError] = useState<string | null>(null);
+  /** The arrow waiting on the server, e.g. "<itemId>:-1". */
+  const [moving, setMoving] = useState<string | null>(null);
 
   function toggle(day: number) {
     setExpanded((prev) => {
@@ -43,23 +47,32 @@ export default function ScheduleScreen() {
     });
   }
 
-  async function run(action: () => Promise<void>, failure: string) {
+  async function move(item: ScheduleItem, direction: -1 | 1) {
+    const day = week?.[item.dayOfWeek] ?? [];
+    const reordered = swapped(day, day.findIndex((i) => i.id === item.id), direction);
     setError(null);
+    setMoving(`${item.id}:${direction}`);
     try {
-      await action();
+      await saveScheduleOrder(reordered.map((i) => i.id));
+      // Show the new order as soon as it's saved, then sync with the server quietly.
+      mutate((w) => w.map((items, d) => (d === item.dayOfWeek ? reordered : items)));
       reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : failure);
+      setError(e instanceof Error ? e.message : 'Could not reorder.');
+    } finally {
+      setMoving(null);
     }
   }
 
   async function remove(item: ScheduleItem) {
-    const ok = await confirmAction(
-      `Remove ${item.workoutName} from ${DAY_NAMES_LONG[item.dayOfWeek]}?`,
-      undefined,
-      'Remove',
-    );
-    if (ok) await run(() => removeFromSchedule(item.id), 'Could not remove the workout.');
+    const removed = await confirm({
+      title: `Remove ${item.workoutName} from ${DAY_NAMES_LONG[item.dayOfWeek]}?`,
+      message: 'The workout itself and your past check-offs are kept.',
+      confirmLabel: 'Remove',
+      destructive: true,
+      onConfirm: () => removeFromSchedule(item.id),
+    });
+    if (removed) reload();
   }
 
   return (
@@ -99,24 +112,20 @@ export default function ScheduleScreen() {
                         </Text>
                       </Pressable>
                     </Link>
-                    <Pressable
-                      accessibilityLabel={`Move ${item.workoutName} up`}
-                      disabled={index === 0}
-                      onPress={() => run(() => moveScheduleItem(user.id, item.id, -1), 'Could not reorder.')}
-                      hitSlop={6}>
-                      <Ionicons name="chevron-up" size={20} color={index === 0 ? colors.border : colors.muted} />
-                    </Pressable>
-                    <Pressable
-                      accessibilityLabel={`Move ${item.workoutName} down`}
-                      disabled={index === items.length - 1}
-                      onPress={() => run(() => moveScheduleItem(user.id, item.id, 1), 'Could not reorder.')}
-                      hitSlop={6}>
-                      <Ionicons
-                        name="chevron-down"
-                        size={20}
-                        color={index === items.length - 1 ? colors.border : colors.muted}
-                      />
-                    </Pressable>
+                    <ArrowButton
+                      direction="up"
+                      label={`Move ${item.workoutName} up`}
+                      disabled={index === 0 || moving !== null}
+                      loading={moving === `${item.id}:-1`}
+                      onPress={() => move(item, -1)}
+                    />
+                    <ArrowButton
+                      direction="down"
+                      label={`Move ${item.workoutName} down`}
+                      disabled={index === items.length - 1 || moving !== null}
+                      loading={moving === `${item.id}:1`}
+                      onPress={() => move(item, 1)}
+                    />
                     <Pressable
                       accessibilityLabel={`Remove ${item.workoutName}`}
                       onPress={() => remove(item)}

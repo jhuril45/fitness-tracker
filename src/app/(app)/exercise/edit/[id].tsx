@@ -1,9 +1,10 @@
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { ActivityIndicator } from 'react-native';
 
 import { ExerciseForm } from '../../../../components/ExerciseForm';
 import { EmptyState } from '../../../../components/ui';
 import { getExercise, updateExercise } from '../../../../lib/exercises';
+import { goBack } from '../../../../lib/navigation';
 import { useLoadOnFocus } from '../../../../lib/useLoadOnFocus';
 
 export default function EditExerciseScreen() {
@@ -21,7 +22,7 @@ export default function EditExerciseScreen() {
       submitLabel="Save changes"
       onSubmit={async ({ startingWeight: _ignored, ...input }) => {
         await updateExercise(exerciseId, input);
-        router.back();
+        goBack({ pathname: '/exercise/[id]', params: { id: exerciseId } });
       }}
     />
   );

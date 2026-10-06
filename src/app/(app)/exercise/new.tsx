@@ -1,8 +1,9 @@
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 
 import { ExerciseForm } from '../../../components/ExerciseForm';
 import { useCurrentUser } from '../../../lib/auth/AuthContext';
 import { addExercises } from '../../../lib/exercises';
+import { goBack } from '../../../lib/navigation';
 
 /** Adds an exercise to the end of the workout given as `?workoutId=`. */
 export default function NewExerciseScreen() {
@@ -15,7 +16,7 @@ export default function NewExerciseScreen() {
       submitLabel="Add exercise"
       onSubmit={async (exercise) => {
         await addExercises(user.id, workoutId, [exercise]);
-        router.back();
+        goBack({ pathname: '/workout/[id]', params: { id: workoutId } });
       }}
     />
   );

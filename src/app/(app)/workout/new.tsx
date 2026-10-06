@@ -1,7 +1,6 @@
-import { router } from 'expo-router';
-
 import { WorkoutForm } from '../../../components/WorkoutForm';
 import { useCurrentUser } from '../../../lib/auth/AuthContext';
+import { goBack } from '../../../lib/navigation';
 import { createWorkout } from '../../../lib/workouts';
 
 export default function NewWorkoutScreen() {
@@ -13,7 +12,7 @@ export default function NewWorkoutScreen() {
       submitLabel="Save workout"
       onSubmit={async (input, exercises) => {
         await createWorkout(user.id, input, exercises);
-        router.back();
+        goBack('/workouts');
       }}
     />
   );

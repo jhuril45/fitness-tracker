@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Link } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Accordion, AccordionAction, AccordionActions } from '../../../components/Accordion';
 import { Skeleton } from '../../../components/Skeleton';
@@ -40,7 +40,9 @@ export default function TodayScreen() {
   const today = toDayString();
   const [date, setDate] = useState(today);
   const [error, setError] = useState<string | null>(null);
-  const { data: plan, error: loadError, reload } = useLoadOnFocus(() => getDayPlan(user.id, date), [user.id, date]);
+  /** The exercise whose check-off is being saved. */
+  const [saving, setSaving] = useState<string | null>(null);
+  const { data: plan, error: loadError, reload, mutate } = useLoadOnFocus(() => getDayPlan(user.id, date), [user.id, date]);
 
   const isFuture = date > today;
   // Every exercise of the day in order, across all of the day's workouts.
@@ -62,14 +64,31 @@ export default function TodayScreen() {
   }
 
   async function toggle(itemId: string, exercise: PlannedExercise) {
-    if (isFuture) return;
+    if (isFuture || saving) return;
     setError(null);
+    setSaving(`${itemId}:${exercise.id}`);
     try {
-      if (exercise.done) await markNotDone(itemId, exercise.id, date);
-      else await markDone(user.id, itemId, exercise, date);
+      let change: Partial<PlannedExercise>;
+      if (exercise.done) {
+        await markNotDone(exercise);
+        change = { done: false, doneWeight: null, completionIds: [] };
+      } else {
+        const id = await markDone(user.id, itemId, exercise, date);
+        change = { done: true, doneWeight: exercise.currentWeight, completionIds: [id] };
+      }
+      // Show the change as soon as it's saved, then sync with the server quietly.
+      mutate((days) =>
+        days.map((w) =>
+          w.id !== itemId
+            ? w
+            : { ...w, exercises: w.exercises.map((e) => (e.id === exercise.id ? { ...e, ...change } : e)) },
+        ),
+      );
       reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not update the exercise.');
+    } finally {
+      setSaving(null);
     }
   }
 
@@ -129,6 +148,8 @@ export default function TodayScreen() {
                 <Button
                   title="Mark as done"
                   onPress={() => toggle(next.itemId, next.exercise)}
+                  loading={saving === `${next.itemId}:${next.exercise.id}`}
+                  disabled={saving !== null}
                   style={styles.nextButton}
                 />
               )}
@@ -153,37 +174,48 @@ export default function TodayScreen() {
                 expanded={isExpanded(workout.id)}
                 onToggle={() => toggleExpanded(workout.id)}>
                 {total === 0 ? <Text style={styles.empty}>Add exercises to this workout first.</Text> : null}
-                {workout.exercises.map((exercise, index) => (
-                  <Pressable
-                    key={exercise.id}
-                    accessibilityRole="checkbox"
-                    accessibilityState={{ checked: exercise.done, disabled: isFuture }}
-                    onPress={() => toggle(workout.id, exercise)}
-                    disabled={isFuture}
-                    style={[styles.item, index > 0 && styles.itemBorder]}>
-                    <Ionicons
-                      name={exercise.done ? 'checkmark-circle' : 'ellipse-outline'}
-                      size={26}
-                      color={exercise.done ? colors.success : exercise === next?.exercise ? colors.primary : colors.muted}
-                    />
-                    <View style={styles.flex}>
-                      <Text
-                        style={[
-                          styles.itemName,
-                          exercise === next?.exercise && styles.itemNext,
-                          exercise.done && styles.itemDone,
-                        ]}>
-                        {index + 1}. {exercise.name}
-                      </Text>
-                      {describe(exercise) ? <Text style={styles.muted}>{describe(exercise)}</Text> : null}
-                    </View>
-                    <Link href={{ pathname: '/exercise/[id]', params: { id: exercise.id } }} asChild>
-                      <Pressable accessibilityLabel={`Open ${exercise.name}`} hitSlop={8}>
-                        <Ionicons name="chevron-forward" size={20} color={colors.muted} />
-                      </Pressable>
-                    </Link>
-                  </Pressable>
-                ))}
+                {workout.exercises.map((exercise, index) => {
+                  const isSaving = saving === `${workout.id}:${exercise.id}`;
+                  return (
+                    <Pressable
+                      key={exercise.id}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: exercise.done, disabled: isFuture, busy: isSaving }}
+                      onPress={() => toggle(workout.id, exercise)}
+                      disabled={isFuture || saving !== null}
+                      style={[styles.item, index > 0 && styles.itemBorder]}>
+                      <View style={styles.check}>
+                        {isSaving ? (
+                          <ActivityIndicator color={colors.primary} />
+                        ) : (
+                          <Ionicons
+                            name={exercise.done ? 'checkmark-circle' : 'ellipse-outline'}
+                            size={26}
+                            color={
+                              exercise.done ? colors.success : exercise === next?.exercise ? colors.primary : colors.muted
+                            }
+                          />
+                        )}
+                      </View>
+                      <View style={styles.flex}>
+                        <Text
+                          style={[
+                            styles.itemName,
+                            exercise === next?.exercise && styles.itemNext,
+                            exercise.done && styles.itemDone,
+                          ]}>
+                          {index + 1}. {exercise.name}
+                        </Text>
+                        {describe(exercise) ? <Text style={styles.muted}>{describe(exercise)}</Text> : null}
+                      </View>
+                      <Link href={{ pathname: '/exercise/[id]', params: { id: exercise.id } }} asChild>
+                        <Pressable accessibilityLabel={`Open ${exercise.name}`} hitSlop={8}>
+                          <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+                        </Pressable>
+                      </Link>
+                    </Pressable>
+                  );
+                })}
                 <AccordionActions>
                   <AccordionAction
                     href={{ pathname: '/workout/[id]', params: { id: workout.workoutId } }}
@@ -247,6 +279,7 @@ const styles = StyleSheet.create({
   empty: { fontSize: 14, color: colors.muted, paddingVertical: spacing.md },
   item: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.md },
   itemBorder: { borderTopWidth: 1, borderTopColor: colors.border },
+  check: { width: 26, height: 26, alignItems: 'center', justifyContent: 'center' },
   itemNext: { color: colors.primary },
   flex: { flex: 1 },
   itemName: { fontSize: 16, fontWeight: '600', color: colors.text },

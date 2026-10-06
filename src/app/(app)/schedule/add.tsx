@@ -1,5 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Link, router, useLocalSearchParams } from 'expo-router';
+import { Link, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
@@ -8,6 +8,7 @@ import { Button, Chip, EmptyState, ErrorBanner } from '../../../components/ui';
 import { useCurrentUser } from '../../../lib/auth/AuthContext';
 import { DAY_NAMES, DAY_NAMES_LONG } from '../../../lib/dates';
 import { countLabel } from '../../../lib/format';
+import { goBack } from '../../../lib/navigation';
 import { addToSchedule, getPlannedWorkoutIds } from '../../../lib/schedule';
 import { useLoadOnFocus } from '../../../lib/useLoadOnFocus';
 import { listWorkouts, type Workout } from '../../../lib/workouts';
@@ -67,7 +68,7 @@ export default function AddToScheduleScreen() {
         picked.map((w) => w.id),
         days,
       );
-      router.back();
+      goBack('/schedule');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not update the schedule.');
       setSaving(false);
