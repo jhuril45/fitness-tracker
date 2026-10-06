@@ -2,7 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { createContext, useCallback, useContext, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { colors, radius, spacing } from '../theme';
+import { colors, fonts, radius, spacing } from '../theme';
 import { Button } from './ui';
 
 export type ConfirmOptions = {
@@ -142,7 +142,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   iconDanger: { backgroundColor: colors.dangerSoft },
-  title: { fontSize: 18, fontWeight: '700', color: colors.text, textAlign: 'center' },
+  title: { fontSize: 18, fontFamily: fonts.heading, color: colors.text, textAlign: 'center' },
   message: { fontSize: 15, color: colors.muted, textAlign: 'center' },
   error: { fontSize: 14, color: colors.danger, textAlign: 'center' },
   buttons: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md, alignSelf: 'stretch' },

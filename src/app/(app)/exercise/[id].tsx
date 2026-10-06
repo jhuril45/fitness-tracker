@@ -10,7 +10,7 @@ import { formatSetsReps, formatWeight, parsePositiveNumber } from '../../../lib/
 import { goBack } from '../../../lib/navigation';
 import { useLoadOnFocus } from '../../../lib/useLoadOnFocus';
 import { summarizePeriod } from '../../../lib/weightHistory';
-import { colors, radius, spacing } from '../../../theme';
+import { colors, fonts, radius, spacing } from '../../../theme';
 
 export default function ExerciseDetailScreen() {
   const { id: exerciseId } = useLocalSearchParams<{ id: string }>();
@@ -162,16 +162,16 @@ const styles = StyleSheet.create({
   content: { padding: spacing.lg, paddingBottom: spacing.xl * 2 },
   headerLink: { color: colors.primary, fontSize: 17 },
   section: { marginBottom: spacing.lg },
-  big: { fontSize: 22, fontWeight: '700', color: colors.text },
+  big: { fontSize: 22, fontFamily: fonts.heading, color: colors.text },
   notes: { fontSize: 15, color: colors.text, marginTop: spacing.xs },
   caption: { fontSize: 13, fontWeight: '600', color: colors.muted, textTransform: 'uppercase' },
-  weight: { fontSize: 36, fontWeight: '800', color: colors.text, marginVertical: spacing.xs },
+  weight: { fontSize: 36, fontFamily: fonts.headingHeavy, color: colors.text, marginVertical: spacing.xs },
   muted: { fontSize: 14, color: colors.muted },
   hint: { fontSize: 13, color: colors.muted },
   changeRow: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.sm, marginTop: spacing.lg },
   changeButton: { marginBottom: spacing.md },
   flex: { flex: 1 },
-  heading: { fontSize: 18, fontWeight: '700', color: colors.text, marginBottom: spacing.sm },
+  heading: { fontSize: 18, fontFamily: fonts.heading, color: colors.text, marginBottom: spacing.sm },
   timeline: { gap: spacing.sm },
   period: {
     backgroundColor: colors.surface,
@@ -183,7 +183,7 @@ const styles = StyleSheet.create({
   },
   periodCurrent: { borderColor: colors.primary },
   periodTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  periodWeight: { fontSize: 18, fontWeight: '700', color: colors.text },
+  periodWeight: { fontSize: 18, fontFamily: fonts.heading, color: colors.text },
   badge: {
     fontSize: 13,
     fontWeight: '600',

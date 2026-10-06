@@ -12,7 +12,7 @@ import { goBack } from '../../../lib/navigation';
 import { addToSchedule, getScheduleOptions } from '../../../lib/schedule';
 import { useLoadOnFocus } from '../../../lib/useLoadOnFocus';
 import type { Workout } from '../../../lib/workouts';
-import { colors, radius, spacing } from '../../../theme';
+import { colors, fonts, radius, spacing } from '../../../theme';
 
 const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
 const ROW_HEIGHT = 64;
@@ -172,7 +172,7 @@ function WorkoutLabel({ workout, selected = false }: { workout: Workout; selecte
 
 const styles = StyleSheet.create({
   content: { padding: spacing.lg, gap: spacing.sm, paddingBottom: spacing.xl * 2 },
-  heading: { fontSize: 16, fontWeight: '700', color: colors.text, marginTop: spacing.md },
+  heading: { fontSize: 16, fontFamily: fonts.heading, color: colors.text, marginTop: spacing.md },
   sub: { fontSize: 14, color: colors.muted },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   row: {

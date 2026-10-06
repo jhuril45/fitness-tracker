@@ -10,7 +10,7 @@ import { goBack } from '../../../lib/navigation';
 import { swapped } from '../../../lib/reorder';
 import { useLoadOnFocus } from '../../../lib/useLoadOnFocus';
 import { deleteWorkout, getWorkout } from '../../../lib/workouts';
-import { colors, spacing } from '../../../theme';
+import { colors, fonts, spacing } from '../../../theme';
 
 export default function WorkoutDetailScreen() {
   const { id: workoutId } = useLocalSearchParams<{ id: string }>();
@@ -122,7 +122,7 @@ const styles = StyleSheet.create({
   content: { padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xl * 2 },
   headerLink: { color: colors.primary, fontSize: 17 },
   notes: { fontSize: 15, color: colors.text },
-  heading: { fontSize: 18, fontWeight: '700', color: colors.text },
+  heading: { fontSize: 18, fontFamily: fonts.heading, color: colors.text },
   list: { paddingVertical: spacing.sm },
   item: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.md },
   itemBorder: { borderTopWidth: 1, borderTopColor: colors.border },

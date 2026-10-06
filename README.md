@@ -8,6 +8,8 @@ tracking the weight you lift over time, and following a daily/weekly workout pla
 - **Register and sign in.** Accounts and all workout data are stored on [Back4App](https://www.back4app.com)
   (Parse), so they sync between devices and the web. The session token is kept in the device's
   secure store (localStorage on web).
+- **Welcome and password reset.** New visitors can register or log in. "Forgot Password?" emails a
+  Back4App link for choosing a new password.
 - **Workouts and exercises.** A workout such as "Chest day" holds an ordered list of exercises
   (e.g. Incline dumbbell bench press 3 × 12, Flat dumbbell bench press 3 × 12, Pec deck 3 × 12). The
   Workouts tab shows each workout as an expandable row with its exercises and an "Add exercise"
@@ -28,7 +30,8 @@ tracking the weight you lift over time, and following a daily/weekly workout pla
 3. Deploy the Cloud Code: in the Back4App dashboard open **Cloud Code**, open `cloud/main.js`, replace
    its contents with this repo's [`cloud/main.js`](cloud/main.js) and click **Deploy**. Redeploy it
    whenever that file changes.
-4. Start the app:
+4. In Back4App's app settings, check that password reset emails are enabled (on by default).
+5. Start the app:
 
 ```bash
 npm install

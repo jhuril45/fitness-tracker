@@ -2,7 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Link, type Href } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { colors, radius, spacing } from '../theme';
+import { colors, fonts, radius, spacing } from '../theme';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -77,7 +77,7 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.lg },
   pressed: { opacity: 0.7 },
   flex: { flex: 1 },
-  title: { fontSize: 17, fontWeight: '600', color: colors.text },
+  title: { fontSize: 17, fontFamily: fonts.medium, color: colors.text },
   titleExpanded: { color: colors.primary },
   tag: { fontSize: 13, color: colors.primary, fontWeight: '600' },
   subtitle: { fontSize: 13, color: colors.muted, marginTop: 2 },

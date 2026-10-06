@@ -11,7 +11,7 @@ import { parseDayString, toDayString } from '../../../lib/dates';
 import { describeExercise } from '../../../lib/format';
 import { getDayPlan, markDone, markNotDone, type PlannedExercise } from '../../../lib/schedule';
 import { useLoadOnFocus } from '../../../lib/useLoadOnFocus';
-import { colors, spacing } from '../../../theme';
+import { colors, fonts, spacing } from '../../../theme';
 
 function shiftDay(day: string, by: number): string {
   const d = parseDayString(day);
@@ -266,14 +266,14 @@ const styles = StyleSheet.create({
   content: { padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xl * 2 },
   greeting: { fontSize: 15, color: colors.muted },
   dayNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  dayTitle: { fontSize: 24, fontWeight: '800', color: colors.text },
+  dayTitle: { fontSize: 24, fontFamily: fonts.headingHeavy, color: colors.text },
   progressText: { fontSize: 14, color: colors.muted, fontWeight: '600' },
   progressTrack: { height: 8, backgroundColor: colors.border, borderRadius: 999, overflow: 'hidden' },
   progressFill: { height: '100%', backgroundColor: colors.success },
   nextCard: { gap: spacing.xs, borderColor: colors.primary, borderWidth: 2 },
   allDone: { alignItems: 'center', borderColor: colors.success },
   nextCaption: { fontSize: 13, fontWeight: '700', color: colors.primary, textTransform: 'uppercase' },
-  nextName: { fontSize: 24, fontWeight: '800', color: colors.text },
+  nextName: { fontSize: 24, fontFamily: fonts.headingHeavy, color: colors.text },
   nextDetail: { fontSize: 16, color: colors.text },
   nextButton: { marginTop: spacing.md },
   empty: { fontSize: 14, color: colors.muted, paddingVertical: spacing.md },
@@ -282,7 +282,7 @@ const styles = StyleSheet.create({
   check: { width: 26, height: 26, alignItems: 'center', justifyContent: 'center' },
   itemNext: { color: colors.primary },
   flex: { flex: 1 },
-  itemName: { fontSize: 16, fontWeight: '600', color: colors.text },
+  itemName: { fontSize: 16, fontFamily: fonts.medium, color: colors.text },
   itemDone: { color: colors.muted, textDecorationLine: 'line-through' },
   muted: { fontSize: 14, color: colors.muted },
 });

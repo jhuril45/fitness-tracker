@@ -80,6 +80,19 @@ export function createBack4AppAuth(): AuthService {
       }
     },
 
+    async requestPasswordReset(email) {
+      const cleanEmail = email.trim().toLowerCase();
+      if (!EMAIL_PATTERN.test(cleanEmail)) throw new AuthError('Please enter a valid email.');
+      try {
+        await request('POST', '/requestPasswordReset', { email: cleanEmail });
+      } catch (e) {
+        // Parse says when no account uses the email (205). Treat it as sent, so
+        // the form doesn't reveal which emails have accounts.
+        if (e instanceof ParseError && e.code === 205) return;
+        throw friendly(e, 'Could not send the reset email.');
+      }
+    },
+
     async logout() {
       // Revoke the token on the server, but sign out locally even if that fails.
       await request('POST', '/logout').catch(() => {});
