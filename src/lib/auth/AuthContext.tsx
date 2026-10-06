@@ -10,6 +10,7 @@ type AuthState = {
   isLoading: boolean;
   register: AuthService['register'];
   login: AuthService['login'];
+  requestPasswordReset: AuthService['requestPasswordReset'];
   logout: () => Promise<void>;
 };
 
@@ -62,14 +63,19 @@ export function AuthProvider({
     [auth],
   );
 
+  const requestPasswordReset = useCallback<AuthService['requestPasswordReset']>(
+    (email) => auth.requestPasswordReset(email),
+    [auth],
+  );
+
   const logout = useCallback(async () => {
     await auth.logout();
     setUser(null);
   }, [auth]);
 
   const value = useMemo(
-    () => ({ user, isLoading, register, login, logout }),
-    [user, isLoading, register, login, logout],
+    () => ({ user, isLoading, register, login, requestPasswordReset, logout }),
+    [user, isLoading, register, login, requestPasswordReset, logout],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

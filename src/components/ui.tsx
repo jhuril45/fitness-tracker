@@ -1,4 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -12,7 +13,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 
-import { colors, radius, spacing } from '../theme';
+import { colors, fonts, radius, spacing } from '../theme';
 
 type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'dangerSoft' | 'ghost';
 
@@ -87,22 +88,51 @@ export function ArrowButton({
   );
 }
 
+/**
+ * A filled text input. `label` is optional (the sign-in screens use the
+ * placeholder alone); password fields get a show/hide toggle.
+ */
 export function TextField({
   label,
   error,
   style,
+  secureTextEntry,
   ...rest
-}: TextInputProps & { label: string; error?: string }) {
+}: TextInputProps & { label?: string; error?: string }) {
+  const [hidden, setHidden] = useState(true);
   return (
     <View style={styles.field}>
-      <Text style={styles.label}>{label}</Text>
-      <TextInput
-        placeholderTextColor={colors.muted}
-        style={[styles.input, error ? styles.inputError : null, style]}
-        {...rest}
-      />
+      {label ? <Text style={styles.label}>{label}</Text> : null}
+      <View>
+        <TextInput
+          placeholderTextColor={colors.muted}
+          accessibilityLabel={label ?? rest.placeholder}
+          secureTextEntry={secureTextEntry && hidden}
+          style={[styles.input, secureTextEntry && styles.inputWithToggle, error ? styles.inputError : null, style]}
+          {...rest}
+        />
+        {secureTextEntry ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={hidden ? 'Show password' : 'Hide password'}
+            onPress={() => setHidden((h) => !h)}
+            hitSlop={8}
+            style={styles.toggle}>
+            <Ionicons name={hidden ? 'eye-outline' : 'eye-off-outline'} size={20} color={colors.muted} />
+          </Pressable>
+        ) : null}
+      </View>
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
     </View>
+  );
+}
+
+/** The rounded-square back button at the top of the sign-in screens. */
+export function BackButton({ onPress }: { onPress: () => void }) {
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={onPress} hitSlop={8} style={styles.back}>
+      <Ionicons name="chevron-back" size={18} color={colors.text} />
+    </Pressable>
   );
 }
 
@@ -149,38 +179,38 @@ export function ErrorBanner({ message }: { message: string | null }) {
 }
 
 const buttonVariants = StyleSheet.create({
-  primary: { backgroundColor: colors.primary },
-  secondary: { backgroundColor: colors.primarySoft },
+  primary: { backgroundColor: '#FFFFFF' },
+  secondary: { backgroundColor: colors.raised },
   danger: { backgroundColor: colors.danger },
   dangerSoft: { backgroundColor: colors.dangerSoft },
   ghost: { backgroundColor: 'transparent' },
 });
 
 const spinnerColors: Record<ButtonVariant, string> = {
-  primary: '#fff',
-  secondary: colors.primary,
-  danger: '#fff',
+  primary: colors.onLight,
+  secondary: colors.text,
+  danger: colors.onLight,
   dangerSoft: colors.danger,
   ghost: colors.primary,
 };
 
 const buttonTextVariants = StyleSheet.create({
-  primary: { color: '#fff' },
-  secondary: { color: colors.primary },
-  danger: { color: '#fff' },
+  primary: { color: colors.onLight },
+  secondary: { color: colors.text },
+  danger: { color: colors.onLight },
   dangerSoft: { color: colors.danger },
   ghost: { color: colors.primary },
 });
 
 const styles = StyleSheet.create({
   button: {
-    minHeight: 48,
+    minHeight: 52,
     paddingHorizontal: spacing.lg,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  buttonText: { fontSize: 16, fontWeight: '600' },
+  buttonText: { fontSize: 15, fontFamily: fonts.medium },
   pressed: { opacity: 0.8 },
   arrow: { width: 24, height: 24, alignItems: 'center', justifyContent: 'center' },
   disabled: { opacity: 0.5 },
@@ -188,13 +218,24 @@ const styles = StyleSheet.create({
   label: { fontSize: 14, fontWeight: '600', color: colors.text, marginBottom: spacing.xs },
   input: {
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: 'transparent',
     borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 12,
-    fontSize: 16,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 14,
+    fontSize: 15,
     color: colors.text,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.raised,
+  },
+  inputWithToggle: { paddingRight: 48 },
+  toggle: { position: 'absolute', right: spacing.lg, top: 0, bottom: 0, justifyContent: 'center' },
+  back: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   inputError: { borderColor: colors.danger },
   errorText: { color: colors.danger, marginTop: spacing.xs, fontSize: 13 },
@@ -211,13 +252,13 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
     borderColor: colors.border,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.raised,
   },
   chipSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
   chipText: { color: colors.text, fontWeight: '500' },
-  chipTextSelected: { color: '#fff' },
+  chipTextSelected: { color: colors.onLight, fontWeight: '700' },
   empty: { alignItems: 'center', padding: spacing.xl, gap: spacing.sm },
-  emptyTitle: { fontSize: 18, fontWeight: '600', color: colors.text },
+  emptyTitle: { fontSize: 18, fontFamily: fonts.heading, color: colors.text },
   emptyMessage: { fontSize: 15, color: colors.muted, textAlign: 'center' },
   banner: {
     backgroundColor: colors.dangerSoft,

@@ -1,12 +1,12 @@
 import { Link } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, Text } from 'react-native';
+import { StyleSheet } from 'react-native';
 
-import { AuthScreen } from '../components/AuthForm';
+import { AuthFooter, AuthScreen, authStyles } from '../components/AuthForm';
 import { Button, ErrorBanner, TextField } from '../components/ui';
 import { useAuth } from '../lib/auth/AuthContext';
 import { MIN_PASSWORD_LENGTH } from '../lib/auth/back4appAuth';
-import { colors, spacing } from '../theme';
+import { spacing } from '../theme';
 
 export default function RegisterScreen() {
   const { register } = useAuth();
@@ -18,12 +18,11 @@ export default function RegisterScreen() {
   const [submitting, setSubmitting] = useState(false);
 
   const mismatch = confirm.length > 0 && confirm !== password;
+  const incomplete = !name || !email || !password || !confirm;
 
   async function onSubmit() {
-    if (password !== confirm) {
-      setError('Passwords do not match.');
-      return;
-    }
+    if (incomplete) return;
+    if (password !== confirm) return setError('Passwords do not match.');
     setError(null);
     setSubmitting(true);
     try {
@@ -35,61 +34,50 @@ export default function RegisterScreen() {
   }
 
   return (
-    <AuthScreen title="Create account" subtitle="Track workouts, weights and your weekly plan.">
+    <AuthScreen
+      title="Hello! Register to get started"
+      footer={
+        <AuthFooter>
+          Already have an account?{' '}
+          <Link href="/sign-in" replace style={authStyles.link}>
+            Login Now
+          </Link>
+        </AuthFooter>
+      }>
       <ErrorBanner message={error} />
+      <TextField value={name} onChangeText={setName} autoComplete="name" textContentType="name" placeholder="Username" />
       <TextField
-        label="Name"
-        value={name}
-        onChangeText={setName}
-        autoComplete="name"
-        textContentType="name"
-      />
-      <TextField
-        label="Email"
         value={email}
         onChangeText={setEmail}
         autoCapitalize="none"
         autoComplete="email"
         keyboardType="email-address"
         textContentType="emailAddress"
-        placeholder="you@example.com"
+        placeholder="Email"
       />
       <TextField
-        label="Password"
         value={password}
         onChangeText={setPassword}
         secureTextEntry
         autoComplete="new-password"
         textContentType="newPassword"
-        placeholder={`At least ${MIN_PASSWORD_LENGTH} characters`}
+        placeholder={`Password (at least ${MIN_PASSWORD_LENGTH} characters)`}
       />
       <TextField
-        label="Confirm password"
         value={confirm}
         onChangeText={setConfirm}
         secureTextEntry
         autoComplete="new-password"
         textContentType="newPassword"
+        placeholder="Confirm password"
         error={mismatch ? 'Passwords do not match.' : undefined}
         onSubmitEditing={onSubmit}
       />
-      <Button
-        title="Create account"
-        onPress={onSubmit}
-        loading={submitting}
-        disabled={!name || !email || !password || !confirm}
-      />
-      <Text style={styles.footer}>
-        Already have an account?{' '}
-        <Link href="/sign-in" replace style={styles.link}>
-          Sign in
-        </Link>
-      </Text>
+      <Button title="Register" onPress={onSubmit} loading={submitting} disabled={incomplete} style={styles.submit} />
     </AuthScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  footer: { textAlign: 'center', marginTop: spacing.xl, color: colors.muted, fontSize: 15 },
-  link: { color: colors.primary, fontWeight: '600' },
+  submit: { marginTop: spacing.md },
 });

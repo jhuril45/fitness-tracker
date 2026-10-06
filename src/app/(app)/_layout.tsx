@@ -1,13 +1,17 @@
 import { Stack } from 'expo-router';
 
-import { colors } from '../../theme';
+import { backgroundLayout } from '../../components/ScreenBackground';
+import { colors, fonts } from '../../theme';
 
 export default function AppLayout() {
   return (
     <Stack
+      screenLayout={backgroundLayout}
       screenOptions={{
-        headerTintColor: colors.primary,
-        headerTitleStyle: { color: colors.text },
+        headerTintColor: colors.text,
+        headerTitleStyle: { color: colors.text, fontFamily: fonts.heading },
+        headerStyle: { backgroundColor: colors.background },
+        headerShadowVisible: false,
         contentStyle: { backgroundColor: colors.background },
       }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />

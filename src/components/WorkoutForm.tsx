@@ -5,7 +5,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { NewExercise, WeightUnit } from '../lib/exercises';
 import { parsePositiveNumber } from '../lib/format';
 import type { WorkoutInput } from '../lib/workouts';
-import { colors, radius, spacing } from '../theme';
+import { colors, fonts, radius, spacing } from '../theme';
 import { Button, Chip, ErrorBanner, TextField } from './ui';
 
 type ExerciseRow = { key: number; name: string; sets: string; reps: string; weight: string };
@@ -170,7 +170,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: spacing.sm,
   },
-  heading: { fontSize: 18, fontWeight: '700', color: colors.text },
+  heading: { fontSize: 18, fontFamily: fonts.heading, color: colors.text },
   chips: { flexDirection: 'row', gap: spacing.sm },
   hint: { fontSize: 13, color: colors.muted, marginBottom: spacing.md, marginTop: spacing.xs },
   row: {
