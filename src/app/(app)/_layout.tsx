@@ -1,9 +1,15 @@
 import { Stack } from 'expo-router';
 
 import { backgroundLayout } from '../../components/ScreenBackground';
+import { useCurrentUser } from '../../lib/auth/AuthContext';
+import { useCheckOffSync } from '../../lib/useCheckOffSync';
 import { colors, fonts } from '../../theme';
 
 export default function AppLayout() {
+  const user = useCurrentUser();
+  // Sends check-offs saved while offline, whichever screen is open.
+  useCheckOffSync(user.id);
+
   return (
     <Stack
       screenLayout={backgroundLayout}

@@ -12,8 +12,12 @@ const SERVER_URL = (process.env.EXPO_PUBLIC_BACK4APP_SERVER_URL || 'https://pars
 const APP_ID = process.env.EXPO_PUBLIC_BACK4APP_APP_ID;
 const JS_KEY = process.env.EXPO_PUBLIC_BACK4APP_JS_KEY;
 
+/** How long a request may take before it's treated as a dropped connection. */
+const REQUEST_TIMEOUT_MS = 20_000;
+
 /** Parse error codes the app reacts to. */
 export const ErrorCode = {
+  NOT_CONFIGURED: -1,
   CONNECTION_FAILED: 100,
   OBJECT_NOT_FOUND: 101,
   INVALID_EMAIL: 125,
@@ -22,6 +26,11 @@ export const ErrorCode = {
   USERNAME_TAKEN: 202,
   EMAIL_TAKEN: 203,
 } as const;
+
+/** True when a request failed because the server couldn't be reached (offline, or too slow). */
+export function isConnectionError(e: unknown): boolean {
+  return e instanceof ParseError && e.code === ErrorCode.CONNECTION_FAILED;
+}
 
 export class ParseError extends Error {
   constructor(
@@ -51,7 +60,7 @@ export function setInvalidSessionHandler(handler: (() => void) | null): void {
 export async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   if (!APP_ID || !JS_KEY) {
     throw new ParseError(
-      ErrorCode.CONNECTION_FAILED,
+      ErrorCode.NOT_CONFIGURED,
       'Back4App is not configured. Add your keys to .env.local and restart the dev server.',
     );
   }
@@ -62,18 +71,25 @@ export async function request<T>(method: string, path: string, body?: unknown): 
   };
   if (sessionToken) headers['X-Parse-Session-Token'] = sessionToken;
 
+  // A request that hangs on a weak connection is given up on, like a dropped one.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   let response: Response;
+  let json: any;
   try {
     response = await fetch(`${SERVER_URL}${path}`, {
       method,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
+      signal: controller.signal,
     });
+    json = await response.json().catch(() => ({}));
   } catch {
     throw new ParseError(ErrorCode.CONNECTION_FAILED, "Can't reach the server. Check your connection.");
+  } finally {
+    clearTimeout(timer);
   }
 
-  const json = await response.json().catch(() => ({}));
   if (!response.ok) {
     const code = typeof json.code === 'number' ? json.code : response.status;
     if (code === ErrorCode.INVALID_SESSION_TOKEN && sessionToken) onInvalidSession?.();

@@ -572,13 +572,30 @@ Parse.Cloud.define('markDone', async (request) => {
   return { completionId: completion.id, weight };
 });
 
+/**
+ * Unchecks an exercise. Pass the check-off ids, and/or the plan entry,
+ * exercise and date: the app sends both, so an uncheck queued while offline
+ * still finds a check-off whose id it never saw. Safe to repeat.
+ */
 Parse.Cloud.define('markNotDone', async (request) => {
   const s = session(request);
-  const ids = cleanIds(request.params.completionIds, 'check-offs');
-  if (ids.length === 0) return { ok: true };
-  const query = ownQuery('Completion', s.user);
-  query.containedIn('objectId', ids);
-  const rows = await query.find(s.opts);
+  const p = request.params;
+  const queries = [];
+  const ids = p.completionIds === undefined ? [] : cleanIds(p.completionIds, 'check-offs');
+  if (ids.length) {
+    const byId = ownQuery('Completion', s.user);
+    byId.containedIn('objectId', ids);
+    queries.push(byId);
+  }
+  if (p.itemId !== undefined || p.exerciseId !== undefined || p.date !== undefined) {
+    const byKey = ownQuery('Completion', s.user);
+    byKey.equalTo('scheduleItem', pointerTo('ScheduleItem', cleanIds([p.itemId], 'schedule entry')[0]));
+    byKey.equalTo('exercise', pointerTo('Exercise', cleanIds([p.exerciseId], 'exercise')[0]));
+    byKey.equalTo('date', cleanDay(p.date));
+    queries.push(byKey);
+  }
+  if (queries.length === 0) return { ok: true };
+  const rows = await Parse.Query.or.apply(Parse.Query, queries).find(s.opts);
   if (rows.length) await Parse.Object.destroyAll(rows, s.opts);
   return { ok: true };
 });

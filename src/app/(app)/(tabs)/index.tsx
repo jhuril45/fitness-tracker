@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Link } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Accordion, AccordionAction, AccordionActions } from '../../../components/Accordion';
@@ -9,9 +9,43 @@ import { Button, Card, EmptyState, ErrorBanner } from '../../../components/ui';
 import { useCurrentUser } from '../../../lib/auth/AuthContext';
 import { parseDayString, toDayString } from '../../../lib/dates';
 import { describeExercise } from '../../../lib/format';
-import { getDayPlan, markDone, markNotDone, type PlannedExercise } from '../../../lib/schedule';
+import {
+  getQueue,
+  onCheckOffFailed,
+  onCheckOffSynced,
+  type PendingCheckOff,
+  submitCheckOff,
+  subscribe,
+} from '../../../lib/checkOffQueue';
+import { getDayPlan, type PlannedExercise, type PlannedWorkout } from '../../../lib/schedule';
 import { useLoadOnFocus } from '../../../lib/useLoadOnFocus';
 import { colors, fonts, spacing } from '../../../theme';
+
+type ShownExercise = PlannedExercise & {
+  /** Saved on this device; the server hasn't confirmed it yet. */
+  pending?: boolean;
+};
+
+type ShownWorkout = Omit<PlannedWorkout, 'exercises'> & { exercises: ShownExercise[] };
+
+/** The day's plan with check-offs that are still waiting to reach the server applied on top. */
+function withPending(plan: PlannedWorkout[], queue: PendingCheckOff[], date: string): ShownWorkout[] {
+  const waiting = new Map(queue.filter((e) => e.date === date).map((e) => [`${e.itemId}:${e.exerciseId}`, e]));
+  if (waiting.size === 0) return plan;
+  return plan.map((w) => ({
+    ...w,
+    exercises: w.exercises.map((e): ShownExercise => {
+      const entry = waiting.get(`${w.id}:${e.id}`);
+      if (!entry) return e;
+      return {
+        ...e,
+        done: entry.done,
+        doneWeight: entry.done ? (e.done ? e.doneWeight : e.currentWeight) : null,
+        pending: true,
+      };
+    }),
+  }));
+}
 
 function shiftDay(day: string, by: number): string {
   const d = parseDayString(day);
@@ -42,7 +76,50 @@ export default function TodayScreen() {
   const [error, setError] = useState<string | null>(null);
   /** The exercise whose check-off is being saved. */
   const [saving, setSaving] = useState<string | null>(null);
-  const { data: plan, error: loadError, reload, mutate } = useLoadOnFocus(() => getDayPlan(date), [user.id, date]);
+  const { data: loadedPlan, error: loadError, reload, mutate } = useLoadOnFocus(() => getDayPlan(date), [user.id, date]);
+
+  // Check-offs saved on this device that the server hasn't confirmed yet are
+  // shown over the loaded plan, so a tick shows at once even when offline.
+  const queue = useSyncExternalStore(subscribe, getQueue, getQueue);
+  const waiting = queue.filter((e) => e.userId === user.id);
+  const plan = loadedPlan && withPending(loadedPlan, waiting, date);
+  // Shown once a check-off has missed its one-second wait and is syncing in the background.
+  const syncingInBackground = waiting.some((e) => `${e.itemId}:${e.exerciseId}` !== saving);
+
+  // Apply what the server confirms (or rejects) to the loaded plan.
+  useEffect(() => {
+    const offSynced = onCheckOffSynced(({ entry, completionId, weight }) => {
+      if (entry.userId !== user.id || entry.date !== date) return;
+      mutate((days) =>
+        days.map((w) =>
+          w.id !== entry.itemId
+            ? w
+            : {
+                ...w,
+                exercises: w.exercises.map((e) =>
+                  e.id !== entry.exerciseId
+                    ? e
+                    : {
+                        ...e,
+                        done: entry.done,
+                        doneWeight: entry.done ? weight : null,
+                        completionIds: entry.done && completionId ? [completionId] : [],
+                      },
+                ),
+              },
+        ),
+      );
+    });
+    const offFailed = onCheckOffFailed((entry, message) => {
+      if (entry.userId !== user.id) return;
+      setError(message);
+      reload();
+    });
+    return () => {
+      offSynced();
+      offFailed();
+    };
+  }, [user.id, date, mutate, reload]);
 
   const isFuture = date > today;
   // Every exercise of the day in order, across all of the day's workouts.
@@ -63,28 +140,24 @@ export default function TodayScreen() {
     setManual(new Map());
   }
 
+  /**
+   * Checks an exercise off (or back on). Shows the change at once, waits up to
+   * a second for the server, then lets it finish in the background, retrying
+   * until it gets through if the connection is down.
+   */
   async function toggle(itemId: string, exercise: PlannedExercise) {
     if (isFuture || saving) return;
     setError(null);
     setSaving(`${itemId}:${exercise.id}`);
     try {
-      let change: Partial<PlannedExercise>;
-      if (exercise.done) {
-        await markNotDone(exercise);
-        change = { done: false, doneWeight: null, completionIds: [] };
-      } else {
-        const { completionId, weight } = await markDone(itemId, exercise.id, date);
-        change = { done: true, doneWeight: weight, completionIds: [completionId] };
-      }
-      // Show the change as soon as it's saved, then sync with the server quietly.
-      mutate((days) =>
-        days.map((w) =>
-          w.id !== itemId
-            ? w
-            : { ...w, exercises: w.exercises.map((e) => (e.id === exercise.id ? { ...e, ...change } : e)) },
-        ),
-      );
-      reload();
+      await submitCheckOff({
+        userId: user.id,
+        itemId,
+        exerciseId: exercise.id,
+        date,
+        done: !exercise.done,
+        completionIds: exercise.completionIds,
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not update the exercise.');
     } finally {
@@ -108,6 +181,12 @@ export default function TodayScreen() {
         </Pressable>
       </View>
       <ErrorBanner message={error ?? loadError} />
+      {syncingInBackground ? (
+        <View style={styles.syncNote}>
+          <Ionicons name="cloud-upload-outline" size={16} color={colors.muted} />
+          <Text style={styles.syncText}>Saved on this device. Syncing when your connection allows.</Text>
+        </View>
+      ) : null}
 
       {!plan && !loadError ? <DayPlanSkeleton /> : null}
 
@@ -207,6 +286,12 @@ export default function TodayScreen() {
                           {index + 1}. {exercise.name}
                         </Text>
                         {describe(exercise) ? <Text style={styles.muted}>{describe(exercise)}</Text> : null}
+                      {exercise.pending && !isSaving ? (
+                        <View style={styles.pendingRow}>
+                          <Ionicons name="cloud-upload-outline" size={13} color={colors.muted} />
+                          <Text style={styles.pendingText}>Waiting to sync</Text>
+                        </View>
+                      ) : null}
                       </View>
                       <Link href={{ pathname: '/exercise/[id]', params: { id: exercise.id } }} asChild>
                         <Pressable accessibilityLabel={`Open ${exercise.name}`} hitSlop={8}>
@@ -258,6 +343,10 @@ function DayPlanSkeleton() {
 }
 
 const styles = StyleSheet.create({
+  syncNote: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  syncText: { flex: 1, fontSize: 13, color: colors.muted },
+  pendingRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+  pendingText: { fontSize: 12, color: colors.muted },
   skeleton: { gap: spacing.md },
   skeletonCard: { gap: spacing.sm },
   skeletonButton: { marginTop: spacing.md },
