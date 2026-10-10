@@ -67,7 +67,15 @@ export function markDone(
   return callFunction('markDone', { itemId, exerciseId, date });
 }
 
-/** Unchecks an exercise by deleting the check-off records loaded with the day's plan. */
-export async function markNotDone(exercise: PlannedExercise): Promise<void> {
-  await callFunction('markNotDone', { completionIds: exercise.completionIds });
+/**
+ * Unchecks an exercise for a date. Sends the known check-off ids and the
+ * entry/exercise/date, so the server also finds check-offs saved while offline.
+ */
+export async function markNotDone(
+  itemId: string,
+  exerciseId: string,
+  date: string,
+  completionIds: string[] = [],
+): Promise<void> {
+  await callFunction('markNotDone', { completionIds, itemId, exerciseId, date });
 }
