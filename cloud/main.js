@@ -602,8 +602,160 @@ Parse.Cloud.define('markNotDone', async (request) => {
 
 // ---------------------------------------------------------------- profile
 
+/** The "YYYY-MM-DD" day after `day`. */
+function nextDay(day) {
+  const parts = day.split('-').map(Number);
+  return new Date(Date.UTC(parts[0], parts[1] - 1, parts[2] + 1)).toISOString().slice(0, 10);
+}
+
+/**
+ * Numbers for the Profile tab. `today` is the user's local day and
+ * `tzOffset` their Date.getTimezoneOffset(), so object creation times can be
+ * turned into the user's own calendar days.
+ *
+ * - workoutsFinished: times a scheduled workout was completed, i.e. every
+ *   exercise it had that day was checked off.
+ * - currentStreak / bestStreak: consecutive scheduled days on which every
+ *   workout planned for the day was finished. Rest days don't break a streak,
+ *   and an unfinished today doesn't either until the day is over. Past days
+ *   are judged by the plan as it was then: workouts and exercises added later
+ *   don't count against them.
+ */
 Parse.Cloud.define('getProfileStats', async (request) => {
   const s = session(request);
-  const counts = await Promise.all([ownQuery('Workout', s.user).count(s.opts), ownQuery('Completion', s.user).count(s.opts)]);
-  return { workouts: counts[0], completions: counts[1] };
+  const today = cleanDay(request.params.today);
+  const offset = Number(request.params.tzOffset);
+  const tzOffset = Number.isFinite(offset) && Math.abs(offset) <= 840 ? offset : 0;
+  const localDay = (date) => new Date(date.getTime() - tzOffset * 60000).toISOString().slice(0, 10);
+
+  const items = ownQuery('ScheduleItem', s.user);
+  items.select('workout', 'dayOfWeek');
+  const exercises = ownQuery('Exercise', s.user);
+  exercises.select('workout');
+  // each() reads every row, past the per-query limit; it doesn't allow a limit of its own.
+  const completionQuery = new Parse.Query('Completion');
+  completionQuery.equalTo('owner', s.user);
+  completionQuery.select('date', 'scheduleItem', 'workout', 'exercise');
+  const completions = [];
+  const results = await Promise.all([
+    ownQuery('Workout', s.user).count(s.opts),
+    items.find(s.opts),
+    exercises.find(s.opts),
+    completionQuery.each((c) => {
+      completions.push(c);
+    }, s.opts),
+  ]);
+
+  // Each workout's exercises, with the day each was added.
+  const exercisesByWorkout = {};
+  for (const e of results[2]) {
+    (exercisesByWorkout[e.get('workout').id] = exercisesByWorkout[e.get('workout').id] || []).push({
+      id: e.id,
+      since: localDay(e.createdAt),
+    });
+  }
+  // Check-offs grouped by plan entry and day.
+  const sessions = {};
+  for (const c of completions) {
+    if (!c.get('scheduleItem')) continue;
+    const key = c.get('scheduleItem').id + '|' + c.get('date');
+    if (!sessions[key]) sessions[key] = { workoutId: c.get('workout').id, date: c.get('date'), done: new Set() };
+    sessions[key].done.add(c.get('exercise').id);
+  }
+  function finished(session) {
+    const due = (exercisesByWorkout[session.workoutId] || []).filter((e) => e.since <= session.date);
+    return due.length > 0 && due.every((e) => session.done.has(e.id));
+  }
+  let workoutsFinished = 0;
+  for (const key of Object.keys(sessions)) if (finished(sessions[key])) workoutsFinished++;
+
+  // The plan per weekday, with the day each entry was added.
+  const plan = [[], [], [], [], [], [], []];
+  for (const item of results[1]) {
+    plan[item.get('dayOfWeek')].push({ id: item.id, workoutId: item.get('workout').id, since: localDay(item.createdAt) });
+  }
+  function dayStatus(day) {
+    const due = plan[weekdayOf(day)].filter((i) => i.since <= day);
+    if (due.length === 0) return 'rest';
+    return due.every((i) => {
+      const session = sessions[i.id + '|' + day];
+      return session && finished(session);
+    })
+      ? 'done'
+      : 'missed';
+  }
+
+  let currentStreak = 0;
+  let bestStreak = 0;
+  const first = completions.reduce((min, c) => (min && min < c.get('date') ? min : c.get('date')), null);
+  if (first && first <= today) {
+    for (let day = first; day <= today; day = nextDay(day)) {
+      const status = dayStatus(day);
+      if (status === 'done') {
+        currentStreak++;
+        bestStreak = Math.max(bestStreak, currentStreak);
+      } else if (status === 'missed' && day !== today) {
+        currentStreak = 0;
+      }
+    }
+  }
+
+  return {
+    workouts: results[0],
+    completions: completions.length,
+    workoutsFinished,
+    currentStreak,
+    bestStreak,
+  };
+});
+
+// ---------------------------------------------------------------- health
+
+//   HealthProfile  owner, sex, age, weightKg, heightCm, weightUnit, heightUnit, activity
+//                  One per user: the measurements behind BMI and the calorie guide.
+
+const SEXES = ['male', 'female'];
+const ACTIVITY_LEVELS = ['sedentary', 'light', 'moderate', 'active', 'veryActive'];
+
+function cleanNumber(value, label, min, max) {
+  const n = Number(value);
+  if (!isFinite(n) || n < min || n > max) throw invalid(`${label} must be between ${min} and ${max}.`);
+  return n;
+}
+
+function healthJson(row) {
+  return {
+    sex: row.get('sex'),
+    age: row.get('age'),
+    weightKg: row.get('weightKg'),
+    heightCm: row.get('heightCm'),
+    weightUnit: row.get('weightUnit') || 'kg',
+    heightUnit: row.get('heightUnit') || 'cm',
+    activity: row.get('activity') || 'moderate',
+  };
+}
+
+Parse.Cloud.define('getHealthProfile', async (request) => {
+  const s = session(request);
+  const row = await ownQuery('HealthProfile', s.user).first(s.opts);
+  return row ? healthJson(row) : null;
+});
+
+Parse.Cloud.define('saveHealthProfile', async (request) => {
+  const s = session(request);
+  const p = request.params.profile || {};
+  if (SEXES.indexOf(p.sex) === -1) throw invalid('Please choose male or female.');
+  const fields = {
+    sex: p.sex,
+    age: Math.round(cleanNumber(p.age, 'Age', 13, 100)),
+    weightKg: Math.round(cleanNumber(p.weightKg, 'Weight (kg)', 30, 300) * 10) / 10,
+    heightCm: Math.round(cleanNumber(p.heightCm, 'Height (cm)', 120, 230) * 10) / 10,
+    weightUnit: p.weightUnit === 'lb' ? 'lb' : 'kg',
+    heightUnit: p.heightUnit === 'ft' ? 'ft' : 'cm',
+    activity: ACTIVITY_LEVELS.indexOf(p.activity) === -1 ? 'moderate' : p.activity,
+  };
+  const row = (await ownQuery('HealthProfile', s.user).first(s.opts)) || newOwned('HealthProfile', s.user, {});
+  row.set(fields);
+  await row.save(null, s.opts);
+  return healthJson(row);
 });

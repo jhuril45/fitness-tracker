@@ -27,6 +27,8 @@ export default function AppLayout() {
       <Stack.Screen name="exercise/new" options={{ title: 'Add exercise', presentation: 'modal' }} />
       <Stack.Screen name="exercise/[id]" options={{ title: 'Exercise' }} />
       <Stack.Screen name="exercise/edit/[id]" options={{ title: 'Edit exercise', presentation: 'modal' }} />
+      <Stack.Screen name="health/details" options={{ title: 'Body Details', presentation: 'modal' }} />
+      <Stack.Screen name="health/guide" options={{ title: 'Calorie Deficit Guide' }} />
       <Stack.Screen name="schedule/add" options={{ title: 'Add to schedule', presentation: 'modal' }} />
     </Stack>
   );

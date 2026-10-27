@@ -38,7 +38,18 @@ export async function deleteWorkout(workoutId: string): Promise<void> {
   await callFunction('deleteWorkout', { workoutId });
 }
 
-/** The numbers shown on the Profile tab. */
-export function getProfileStats(): Promise<{ workouts: number; completions: number }> {
-  return callFunction('getProfileStats');
+export type ProfileStats = {
+  workouts: number;
+  /** Exercises checked off, ever. */
+  completions: number;
+  /** Times a scheduled workout had every exercise checked off on its day. */
+  workoutsFinished: number;
+  /** Consecutive scheduled days with everything finished; rest days don't break it. */
+  currentStreak: number;
+  bestStreak: number;
+};
+
+/** The numbers shown on the Profile tab, counted in the user's own time zone. */
+export function getProfileStats(): Promise<ProfileStats> {
+  return callFunction('getProfileStats', { today: toDayString(), tzOffset: new Date().getTimezoneOffset() });
 }
